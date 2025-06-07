@@ -1,0 +1,32 @@
+package com.quasarbyte.llm.codereview.sdk.service;
+
+import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmChatCompletionConfiguration;
+import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmMessagesMapperConfiguration;
+import com.quasarbyte.llm.codereview.sdk.model.parameter.LlmClient;
+import com.quasarbyte.llm.codereview.sdk.model.parameter.Rule;
+import com.quasarbyte.llm.codereview.sdk.model.resolved.ResolvedFilePath;
+import com.quasarbyte.llm.codereview.sdk.model.reviewed.ReviewedResultItem;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+
+public interface MultiThreadTaskDispatcher {
+
+    List<ReviewedResultItem> dispatch(List<List<Rule>> rulesBatches,
+                                             List<List<ResolvedFilePath>> resolvedFilePathBatches,
+                                             LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+                                             LlmMessagesMapperConfiguration messagesMapperConfiguration,
+                                             LlmClient llmClient,
+                                             int concurrency,
+                                             ExecutorService executorService);
+
+    List<ReviewedResultItem> dispatch(List<List<Rule>> rulesBatches,
+                                      List<List<ResolvedFilePath>> resolvedFilePathBatches,
+                                      LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+                                      LlmMessagesMapperConfiguration messagesMapperConfiguration,
+                                      LlmClient llmClient,
+                                      int concurrency,
+                                      Duration timeoutDuration,
+                                      ExecutorService executorService);
+}
