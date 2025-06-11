@@ -6,14 +6,16 @@ import com.openai.client.OpenAIClient;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.StructuredChatCompletion;
 import com.openai.models.chat.completions.StructuredChatCompletionCreateParams;
+import com.openai.models.chat.completions.StructuredChatCompletionMessage;
 import com.openai.models.completions.CompletionUsage;
-import com.quasarbyte.llm.codereview.sdk.exception.LLMCodeReviewException;
+import com.quasarbyte.llm.codereview.sdk.exception.LLMCodeReviewRuntimeException;
 import com.quasarbyte.llm.codereview.sdk.model.FileKey;
 import com.quasarbyte.llm.codereview.sdk.model.RuleKey;
 import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmChatCompletionConfiguration;
 import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmMessagesMapperConfiguration;
 import com.quasarbyte.llm.codereview.sdk.model.llm.*;
 import com.quasarbyte.llm.codereview.sdk.model.parameter.LlmClient;
+
 import com.quasarbyte.llm.codereview.sdk.model.prompt.PromptFile;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.PromptRule;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.ReviewPrompt;
@@ -21,6 +23,7 @@ import com.quasarbyte.llm.codereview.sdk.model.reviewed.*;
 import com.quasarbyte.llm.codereview.sdk.service.ChatCompletionCreateParamsFactory;
 import com.quasarbyte.llm.codereview.sdk.service.LlmMessagesMapper;
 import com.quasarbyte.llm.codereview.sdk.service.LlmReviewProcessor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,14 +94,11 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
 
         if (llmMessages.getMessages().isEmpty()) {
             logger.info("No LLM messages to process. Returning empty result.");
-            return new ReviewedResultItem()
-                    .setExecutionDetailsItem(new ReviewedExecutionDetailsItem()
-                            .setPrompt(prompt)
-                            .setLlmMessages(llmMessages))
-                    .setFiles(Collections.emptyList());
+            return new ReviewedResultItem().setFiles(Collections.emptyList());
         }
 
-        final ChatCompletionCreateParams.Builder chatCompletionCreateParamsBuilder = chatCompletionCreateParamsFactory.create(llmChatCompletionConfiguration);
+        final ChatCompletionCreateParams.Builder chatCompletionCreateParamsBuilder = chatCompletionCreateParamsFactory
+                .create(llmChatCompletionConfiguration);
 
         llmMessages.getMessages()
                 .forEach(llmMessage -> {
@@ -108,18 +108,29 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
                         chatCompletionCreateParamsBuilder.addUserMessage(llmMessage.getContent());
                     } else {
                         logger.error("Unknown LLM message role encountered: {}", llmMessage.getRole());
-                        throw new LLMCodeReviewException("Unknown role: " + llmMessage.getRole());
+                        throw new LLMCodeReviewRuntimeException("Unknown role: " + llmMessage.getRole());
                     }
                 });
 
-        StructuredChatCompletionCreateParams<LlmReviewResult> params = chatCompletionCreateParamsBuilder.responseFormat(LlmReviewResult.class)
-                .build();
+        final StructuredChatCompletionCreateParams.Builder<? extends LlmReviewResult> paramsBuilder;
+        final StructuredChatCompletionCreateParams<? extends LlmReviewResult> params;
+
+        logger.info("Processing review prompt. Reasoning: {}", prompt.getUseReasoning());
+        if (Boolean.TRUE.equals(prompt.getUseReasoning())) {
+            paramsBuilder = chatCompletionCreateParamsBuilder
+                    .responseFormat(LlmReviewWithStepsResult.class);
+        } else {
+            paramsBuilder = chatCompletionCreateParamsBuilder
+                    .responseFormat(LlmReviewResult.class);
+        }
+
+        params = paramsBuilder.build();
 
         OpenAIClient openAIClient = llmClient.getOpenAIClient();
 
         try {
             logger.info("Calling LLM Provider chat completion API.");
-            StructuredChatCompletion<LlmReviewResult> chatCompletion = openAIClient
+            StructuredChatCompletion<? extends LlmReviewResult> chatCompletion = openAIClient
                     .chat()
                     .completions()
                     .create(params);
@@ -128,15 +139,24 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
 
             logger.debug("Received {} chat completion choices(s) from LLM Provider.", chatCompletion.choices().size());
 
-            List<LlmReviewResult> llmReviewResults = chatCompletion
+            List<? extends LlmReviewResult> llmReviewResults = chatCompletion
                     .choices()
                     .stream()
-                    .map(choice -> choice.message().content())
+                    .map(StructuredChatCompletion.Choice::message)
+                    .map(StructuredChatCompletionMessage::content)
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .collect(toList());
 
             logger.debug("Received {} review result(s) from LLM Provider.", llmReviewResults.size());
+
+            if (logger.isDebugEnabled()) {
+                try {
+                    logger.debug("llmReviewResults: {}", objectMapper.writeValueAsString(llmReviewResults));
+                } catch (Exception e) {
+                    logger.warn("Failed to serialize llmReviewResults for debug logging: {}", e.getMessage());
+                }
+            }
 
             List<LlmReviewedFile> llmReviewedFiles = llmReviewResults
                     .stream()
@@ -146,11 +166,7 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
 
             if (llmReviewedFiles.isEmpty()) {
                 logger.info("No reviewed files in LLM Provider response.");
-                return new ReviewedResultItem()
-                        .setExecutionDetailsItem(new ReviewedExecutionDetailsItem()
-                                .setPrompt(prompt)
-                                .setLlmMessages(llmMessages))
-                        .setFiles(Collections.emptyList());
+                return new ReviewedResultItem().setFiles(Collections.emptyList());
             }
 
             List<LlmReviewedFile> mergedFiles = mergeFiles(llmReviewedFiles);
@@ -174,17 +190,30 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
                             (fileOne, fileTwo) -> fileTwo // if keys are the same, take the last one
                     ));
 
+            List<ThinkStep> thinkSteps = llmReviewResults.stream()
+                    .flatMap(this::getThinkSteps)
+                    .collect(toList());
+
+            Map<FileKey, List<ThinkStep>> fileKeyThinkStepMap = thinkSteps.stream()
+                    .filter(thinkStep -> thinkStep.getFileId() != null && thinkStep.getFileName() != null)
+                    .collect(Collectors.groupingBy(ts -> new FileKey(ts.getFileId(), ts.getFileName()), Collectors.toList()));
+
             List<ReviewedFile> reviewedFiles = mergedFiles.stream()
                     .map(file -> new ReviewedFile()
                             .setPromptFile(fileMap.get(new FileKey(file.getFileId(), file.getFileName())))
-                            .setComments(file.getComments().stream().map(comment -> new ReviewedComment()
-                                            .setRule(ruleMap.get(new RuleKey(comment.getRuleId(), comment.getRuleCode())))
+                            .setComments(file.getComments()
+                                    .stream()
+                                    .map(comment -> new ReviewedComment()
+                                            .setRule(getRule(comment, ruleMap))
+                                            .setRuleId(comment.getRuleId())
+                                            .setRuleCode(comment.getRuleCode())
                                             .setLine(comment.getLine())
                                             .setColumn(comment.getColumn())
                                             .setMessage(comment.getMessage())
                                             .setSuggestion(comment.getSuggestion()))
                                     .collect(toList())
                             )
+                            .setReviewedThinkSteps(getThinkSteps(file, fileKeyThinkStepMap))
                     )
                     .collect(toList());
 
@@ -199,19 +228,18 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
 
             logger.info("Processed review prompt successfully. Reviewed files: {}", reviewedFiles.size());
 
+            logger.debug("Think steps size: {}", thinkSteps.size());
+
             ReviewedResultItem reviewedResultItem = new ReviewedResultItem()
-                    .setExecutionDetailsItem(new ReviewedExecutionDetailsItem()
-                            .setPrompt(prompt)
-                            .setLlmMessages(llmMessages)
-                            .setLlmReviewResults(llmReviewResults))
                     .setFiles(reviewedFiles)
+                    .setThinkSteps(thinkSteps)
                     .setCompletionUsage(completionUsageOptional
                             .map(completionUsage -> new ReviewedCompletionUsage()
                                     .setCompletionTokens(completionUsage.completionTokens())
                                     .setPromptTokens(completionUsage.promptTokens())
                                     .setTotalTokens(completionUsage.totalTokens()))
                             .orElse(null));
-            
+
             if (logger.isDebugEnabled()) {
                 try {
                     String reviewedResultItemJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(reviewedResultItem);
@@ -220,12 +248,37 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
                     logger.trace("Failed to serialize llmReviewResults to JSON", e);
                 }
             }
-            
+
             return reviewedResultItem;
         } catch (Exception e) {
             logger.error("LLM review processing failed: {}", e.getMessage(), e);
-            throw new LLMCodeReviewException("Failed to process review prompt: " + e.getMessage(), e);
+            throw new LLMCodeReviewRuntimeException("Failed to process review prompt: " + e.getMessage(), e);
         }
+    }
+
+    private <T extends LlmReviewResult> Stream<ThinkStep> getThinkSteps(T llmReviewResult) {
+        if (llmReviewResult instanceof LlmReviewWithStepsResult) {
+            LlmReviewWithStepsResult r = (LlmReviewWithStepsResult) llmReviewResult;
+            return r.getThinkSteps() != null ? r.getThinkSteps().stream().filter(Objects::nonNull) : Stream.empty();
+        } else {
+            return Stream.empty();
+        }
+    }
+
+    private static List<ReviewedThinkStep> getThinkSteps(LlmReviewedFile file, Map<FileKey, List<ThinkStep>> fileKeyThinkStepMap) {
+        List<ThinkStep> thinkSteps = fileKeyThinkStepMap.get(new FileKey(file.getFileId(), file.getFileName()));
+        return thinkSteps != null ? thinkSteps.stream()
+                .map(thinkStep -> new ReviewedThinkStep()
+                        .setFileId(thinkStep.getFileId())
+                        .setFileName(thinkStep.getFileName())
+                        .setRuleId(thinkStep.getRuleId())
+                        .setRuleCode(thinkStep.getRuleCode())
+                        .setThinkText(thinkStep.getThinkText()))
+                .collect(toList()) : Collections.emptyList();
+    }
+
+    private static PromptRule getRule(LlmReviewComment comment, Map<RuleKey, PromptRule> ruleMap) {
+        return ruleMap.get(new RuleKey(comment.getRuleId(), comment.getRuleCode()));
     }
 
     private static List<LlmReviewedFile> mergeFiles(List<LlmReviewedFile> files) {
@@ -250,9 +303,11 @@ public class LlmReviewProcessorImpl implements LlmReviewProcessor {
                     List<LlmReviewComment> distinctComments = getDistinctComments(allComments);
 
                     if (logger.isDebugEnabled()) {
-                        logger.debug("Merged fileId: {}, fileName: {}, comments: {} (from {} group items)",
-                                key.getId(), key.getName(),
-                                distinctComments.size(), group.size());
+                        logger.debug("Merged fileId: {}, fileName: '{}', comments: {} (from {} group items)",
+                                key.getId(),
+                                key.getName(),
+                                distinctComments.size(),
+                                group.size());
                     }
 
                     return new LlmReviewedFile()

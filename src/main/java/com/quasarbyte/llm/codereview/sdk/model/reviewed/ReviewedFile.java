@@ -7,6 +7,7 @@ import java.util.List;
 public class ReviewedFile {
     private PromptFile promptFile;
     private List<ReviewedComment> comments;
+    private List<ReviewedThinkStep> reviewedThinkSteps;
 
     public PromptFile getPromptFile() {
         return promptFile;
@@ -23,6 +24,15 @@ public class ReviewedFile {
 
     public ReviewedFile setComments(List<ReviewedComment> comments) {
         this.comments = comments;
+        return this;
+    }
+
+    public List<ReviewedThinkStep> getReviewedThinkSteps() {
+        return reviewedThinkSteps;
+    }
+
+    public ReviewedFile setReviewedThinkSteps(List<ReviewedThinkStep> reviewedThinkSteps) {
+        this.reviewedThinkSteps = reviewedThinkSteps;
         return this;
     }
 }

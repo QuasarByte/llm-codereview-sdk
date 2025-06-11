@@ -39,7 +39,8 @@ public class ReviewResultAggregatorImpl implements ReviewResultAggregator {
                         if (!fileMap.containsKey(filePath)) {
                             AggregatedFile newAggregatedFile = new AggregatedFile()
                                     .setSourceFile(sourceFile)
-                                    .setComments(getComments(reviewedFile));
+                                    .setComments(new ArrayList<>(getComments(reviewedFile)))
+                                    .setReviewedThinkSteps(new ArrayList<>(getThinkSteps(reviewedFile)));
                             fileMap.put(filePath, newAggregatedFile);
                             logger.debug("Added new AggregatedFile for path: {}", filePath);
                         } else {
@@ -127,4 +128,20 @@ public class ReviewResultAggregatorImpl implements ReviewResultAggregator {
             return comments;
         }
     }
+
+    private static List<ReviewedThinkStep> getThinkSteps(ReviewedFile reviewedFile) {
+        if (reviewedFile == null || reviewedFile.getReviewedThinkSteps() == null || reviewedFile.getReviewedThinkSteps().isEmpty()) {
+            logger.debug("No think steps found for ReviewedFile.");
+            return Collections.emptyList();
+        } else {
+            List<ReviewedThinkStep> thinkSteps = reviewedFile
+                    .getReviewedThinkSteps()
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            logger.debug("Retrieved {} think steps from ReviewedFile.", thinkSteps.size());
+            return thinkSteps;
+        }
+    }
+
 }

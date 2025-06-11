@@ -86,16 +86,17 @@ public class ReviewConfigurationResolverImpl implements ReviewConfigurationResol
         List<String> paths = fileGroup.getPaths();
         logger.debug("FileGroup has {} paths.", paths != null ? paths.size() : 0);
 
+        resolvedFileGroup
+                .setFileGroup(fileGroup)
+                .setResolvedReviewTarget(resolvedReviewTarget);
+
         List<ResolvedFileGroupPath> resolvedFileGroupPaths = paths == null
                 ? Collections.emptyList()
                 : paths.stream()
                 .map(path -> resolveFileGroupPath(path, resolvedFileGroup))
                 .collect(Collectors.toList());
 
-        resolvedFileGroup
-                .setFileGroup(fileGroup)
-                .setResolvedReviewTarget(resolvedReviewTarget)
-                .setResolvedFileGroupPaths(resolvedFileGroupPaths);
+        resolvedFileGroup.setResolvedFileGroupPaths(resolvedFileGroupPaths);
 
         logger.debug("Resolved FileGroup with {} paths.", resolvedFileGroupPaths.size());
         return resolvedFileGroup;
@@ -104,11 +105,18 @@ public class ReviewConfigurationResolverImpl implements ReviewConfigurationResol
     private ResolvedFileGroupPath resolveFileGroupPath(
             String path,
             ResolvedFileGroup resolvedFileGroup) {
+        Objects.requireNonNull(path, "path must not be null");
+        Objects.requireNonNull(resolvedFileGroup, "resolvedFileGroup must not be null");
+
         logger.debug("Resolving FileGroupPath for path: {}", path);
 
         ResolvedFileGroupPath resolvedFileGroupPath = new ResolvedFileGroupPath();
+        FileGroup fileGroup = resolvedFileGroup.getFileGroup();
+        Objects.requireNonNull(fileGroup, "fileGroup must not be null");
 
-        List<String> resolvedPathStrings = targetResolverService.resolve(path);
+        List<String> excludePaths = fileGroup.getExcludePaths() != null ? fileGroup.getExcludePaths() : Collections.emptyList();
+
+        List<String> resolvedPathStrings = targetResolverService.resolve(path, excludePaths);
         logger.debug("TargetResolverService resolved {} file(s) for path '{}'.", resolvedPathStrings.size(), path);
 
         List<ResolvedFilePath> resolvedPaths = resolvedPathStrings

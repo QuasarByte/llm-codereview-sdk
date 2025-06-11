@@ -11,6 +11,11 @@ import com.quasarbyte.llm.codereview.sdk.service.LlmClientFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
 public class LlmClientFactoryImpl implements LlmClientFactory {
 
     private static final Logger logger = LoggerFactory.getLogger(LlmClientFactoryImpl.class);
@@ -107,6 +112,12 @@ public class LlmClientFactoryImpl implements LlmClientFactory {
         logger.debug("Returning new LlmClient...");
 
         return llmClient;
+    }
+
+    @Override
+    public List<LlmClient> create(List<LlmClientConfiguration> configs) {
+        Objects.requireNonNull(configs, "configs cannot be null");
+        return configs.stream().map(this::create).collect(Collectors.toList());
     }
 
     private static LlmClientConfiguration maskedLlmClientConfigurationCopy(LlmClientConfiguration configuration) {

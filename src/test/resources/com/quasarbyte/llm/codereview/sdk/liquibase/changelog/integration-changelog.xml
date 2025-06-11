@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="integration-1" author="integration-test">
+        <comment>Create integration test table</comment>
+        <createTable tableName="integration_test">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="test_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(50)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <rollback>
+            <dropTable tableName="integration_test"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="integration-2" author="integration-test" context="test">
+        <comment>Insert test data for integration tests</comment>
+        <insert tableName="integration_test">
+            <column name="test_name" value="Basic Connection Test"/>
+            <column name="status" value="PASSED"/>
+        </insert>
+        <insert tableName="integration_test">
+            <column name="test_name" value="Migration Test"/>
+            <column name="status" value="PASSED"/>
+        </insert>
+        <rollback>
+            <delete tableName="integration_test">
+                <where>test_name IN ('Basic Connection Test', 'Migration Test')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

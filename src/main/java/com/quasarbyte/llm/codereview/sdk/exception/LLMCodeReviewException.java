@@ -1,6 +1,6 @@
 package com.quasarbyte.llm.codereview.sdk.exception;
 
-public class LLMCodeReviewException extends RuntimeException {
+public class LLMCodeReviewException extends Exception {
     public LLMCodeReviewException(String message) {
         super(message);
     }

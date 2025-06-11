@@ -1,41 +1,58 @@
 package com.quasarbyte.llm.codereview.sdk.service.impl;
 
 import com.quasarbyte.llm.codereview.sdk.exception.*;
-import com.quasarbyte.llm.codereview.sdk.model.SourceFile;
 import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmChatCompletionConfiguration;
 import com.quasarbyte.llm.codereview.sdk.model.configuration.LlmMessagesMapperConfiguration;
 import com.quasarbyte.llm.codereview.sdk.model.parameter.LlmClient;
+import com.quasarbyte.llm.codereview.sdk.model.parameter.LlmTokensQuota;
+import com.quasarbyte.llm.codereview.sdk.model.parameter.LoadBalancingStrategy;
 import com.quasarbyte.llm.codereview.sdk.model.parameter.Rule;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.ReviewPrompt;
 import com.quasarbyte.llm.codereview.sdk.model.resolved.ResolvedFilePath;
 import com.quasarbyte.llm.codereview.sdk.model.resolved.ResolvedFilesRules;
+import com.quasarbyte.llm.codereview.sdk.model.reviewed.ReviewedCompletionUsage;
 import com.quasarbyte.llm.codereview.sdk.model.reviewed.ReviewedResultItem;
 import com.quasarbyte.llm.codereview.sdk.service.LlmReviewProcessor;
+import com.quasarbyte.llm.codereview.sdk.service.LlmClientLoadBalancerRoundRobin;
+import com.quasarbyte.llm.codereview.sdk.service.LlmClientLoadBalancerRandom;
 import com.quasarbyte.llm.codereview.sdk.service.MultiThreadTaskDispatcher;
-import com.quasarbyte.llm.codereview.sdk.service.ResolvedFilePathToPromptMapper;
+import com.quasarbyte.llm.codereview.sdk.service.QuotaTracker;
+import com.quasarbyte.llm.codereview.sdk.service.ReviewPromptCreator;
+import com.quasarbyte.llm.codereview.sdk.service.util.LlmTokensQuotaValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher {
 
     private static final Logger logger = LoggerFactory.getLogger(MultiThreadTaskDispatcherImpl.class);
 
     private final LlmReviewProcessor llmReviewProcessor;
-    private final ResolvedFilePathToPromptMapper resolvedFilePathToPromptMapper;
+    private final ReviewPromptCreator reviewPromptCreator;
+    private final LlmClientLoadBalancerRoundRobin roundRobinLoadBalancer;
+    private final LlmClientLoadBalancerRandom randomLoadBalancer;
 
-    public MultiThreadTaskDispatcherImpl(LlmReviewProcessor llmReviewProcessor, ResolvedFilePathToPromptMapper resolvedFilePathToPromptMapper) {
+    public MultiThreadTaskDispatcherImpl(LlmReviewProcessor llmReviewProcessor, 
+                                         ReviewPromptCreator reviewPromptCreator,
+                                         LlmClientLoadBalancerRoundRobin roundRobinLoadBalancer,
+                                         LlmClientLoadBalancerRandom randomLoadBalancer) {
         this.llmReviewProcessor = llmReviewProcessor;
-        this.resolvedFilePathToPromptMapper = resolvedFilePathToPromptMapper;
+        this.reviewPromptCreator = reviewPromptCreator;
+        this.roundRobinLoadBalancer = roundRobinLoadBalancer;
+        this.randomLoadBalancer = randomLoadBalancer;
     }
 
     @Override
     public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
             List<List<Rule>> rulesBatches,
             List<List<ResolvedFilePath>> resolvedFilePathBatches,
             LlmChatCompletionConfiguration llmChatCompletionConfiguration,
@@ -44,6 +61,149 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
             int concurrency,
             ExecutorService executorService) {
 
+        return processInternal(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClient, concurrency, null, executorService, null);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            LlmClient llmClient,
+            int concurrency,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
+
+        return processInternal(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClient, concurrency, null, executorService, tokensQuota);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            LlmClient llmClient,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService) {
+
+        return processInternal(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClient, concurrency, timeoutDuration, executorService, null);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            LlmClient llmClient,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
+
+        return processInternal(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClient, concurrency, timeoutDuration, executorService, tokensQuota);
+    }
+
+    // New load balancing methods
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            List<LlmClient> llmClients,
+            LoadBalancingStrategy loadBalancingStrategy,
+            int concurrency,
+            ExecutorService executorService) {
+
+        return processInternalWithLoadBalancing(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClients, loadBalancingStrategy, concurrency, null, executorService, null);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            List<LlmClient> llmClients,
+            LoadBalancingStrategy loadBalancingStrategy,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService) {
+
+        return processInternalWithLoadBalancing(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClients, loadBalancingStrategy, concurrency, timeoutDuration, executorService, null);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            List<LlmClient> llmClients,
+            LoadBalancingStrategy loadBalancingStrategy,
+            int concurrency,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
+
+        return processInternalWithLoadBalancing(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClients, loadBalancingStrategy, concurrency, null, executorService, tokensQuota);
+    }
+
+    @Override
+    public List<ReviewedResultItem> dispatch(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            List<LlmClient> llmClients,
+            LoadBalancingStrategy loadBalancingStrategy,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
+
+        return processInternalWithLoadBalancing(useReasoning, rulesBatches, resolvedFilePathBatches,
+                llmChatCompletionConfiguration, messagesMapperConfiguration,
+                llmClients, loadBalancingStrategy, concurrency, timeoutDuration, executorService, tokensQuota);
+    }
+
+    private List<ReviewedResultItem> processInternal(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            LlmClient llmClient,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
+
+        Objects.requireNonNull(useReasoning, "useReasoning must not be null");
         Objects.requireNonNull(rulesBatches, "rulesBatches must not be null");
         Objects.requireNonNull(resolvedFilePathBatches, "resolvedFilePathBatches must not be null");
         Objects.requireNonNull(llmChatCompletionConfiguration, "llmChatCompletionConfiguration must not be null");
@@ -52,7 +212,7 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
         Objects.requireNonNull(executorService, "executorService must not be null");
 
         if (concurrency < 1) {
-            throw new LLMCodeReviewException("Thread count cannot be less than 1");
+            throw new LLMCodeReviewRuntimeException("Thread count cannot be less than 1");
         }
 
         if (resolvedFilePathBatches.isEmpty()) {
@@ -60,8 +220,22 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
             return Collections.emptyList();
         }
 
-        logger.info("Starting multi-thread dispatch of {} file batches (concurrency = {}, no timeout)",
-                resolvedFilePathBatches.size(), concurrency);
+        // Initialize thread-safe quota tracker
+        final QuotaTracker quotaTracker = new ThreadSafeQuotaTrackerImpl();
+
+        String logMessage = timeoutDuration == null ?
+                "Starting multi-thread dispatch of {} file batches (concurrency = {}, no timeout)" :
+                "Starting multi-thread dispatch of {} file batches (concurrency = {}, timeout = {} ms)";
+
+        if (tokensQuota != null) {
+            logMessage = logMessage.replace("dispatch", "dispatch with thread-safe token quota validation");
+        }
+
+        if (timeoutDuration == null) {
+            logger.info(logMessage, resolvedFilePathBatches.size(), concurrency);
+        } else {
+            logger.info(logMessage, resolvedFilePathBatches.size(), concurrency, timeoutDuration.toMillis());
+        }
 
         // Optional: warn if executorService may not have enough threads for desired concurrency
         if (executorService instanceof ThreadPoolExecutor) {
@@ -79,7 +253,7 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
         if (rulesBatches.isEmpty()) {
             logger.info("No rules batches provided. Each file batch will be processed with empty rule set.");
             resolvedFilePathBatches.forEach(rfp ->
-                    resolvedFilesRulesList.add(new ResolvedFilesRules(rfp, new ArrayList<>()))
+                    resolvedFilesRulesList.add(new ResolvedFilesRules(rfp, Collections.emptyList()))
             );
         } else {
             logger.info("Preparing Cartesian product of file batches and rule batches.");
@@ -92,59 +266,76 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
 
         logger.info("Prepared {} ResolvedFilesRules batches for processing.", resolvedFilesRulesList.size());
 
-        Map<String, SourceFile> sourceFileCache = new ConcurrentHashMap<>();
-        AtomicLong fileId = new AtomicLong();
-        AtomicLong ruleId = new AtomicLong();
+        final List<ReviewPrompt> reviewPrompts = reviewPromptCreator.create(resolvedFilesRulesList, useReasoning);
 
-        int totalBatches = (resolvedFilesRulesList.size() + concurrency - 1) / concurrency;
+        int totalBatches = (reviewPrompts.size() + concurrency - 1) / concurrency;
 
-        for (int i = 0, batchNum = 0; i < resolvedFilesRulesList.size(); i += concurrency, batchNum++) {
+        for (int i = 0, batchNum = 0; i < reviewPrompts.size(); i += concurrency, batchNum++) {
+
+            if (timeoutDuration != null) {
+                Duration elapsed = Duration.between(startTime, Instant.now());
+                Duration remaining = timeoutDuration.minus(elapsed);
+
+                if (remaining.isNegative() || remaining.isZero()) {
+                    logger.warn("Timeout reached before processing batch group #{} of {} batches.", batchNum, totalBatches);
+                    throw new TaskExecutorTimeoutException(
+                            String.format("Timeout after %d ms at batch group #%d of %d batches", timeoutDuration.toMillis(), batchNum, totalBatches)
+                    );
+                }
+            }
 
             logger.info("Processing parallel batch group #{} of {}", batchNum, totalBatches);
 
             Instant batchStart = Instant.now();
 
-            List<ResolvedFilesRules> resolvedFilesRules =
-                    resolvedFilesRulesList.subList(i, Math.min(i + concurrency, resolvedFilesRulesList.size()));
+            List<ReviewPrompt> prompts = reviewPrompts.subList(i, Math.min(i + concurrency, reviewPrompts.size()));
             List<Callable<ReviewedResultItem>> callables = new ArrayList<>();
 
             // Prepare tasks for this batch group
-            for (int j = 0; j < resolvedFilesRules.size(); j++) {
+            for (int j = 0; j < prompts.size(); j++) {
                 final int batchIndex = i + j;
-                ResolvedFilesRules resolvedFRBatch = resolvedFilesRules.get(j);
+                ReviewPrompt reviewPrompt = prompts.get(j);
                 callables.add(() -> {
-                    logger.debug(
-                            "Processing batch #{}: {} files, {} rules",
-                            batchIndex,
-                            resolvedFRBatch.getResolvedFilePaths() != null ? resolvedFRBatch.getResolvedFilePaths().size() : 0,
-                            resolvedFRBatch.getRules() != null ? resolvedFRBatch.getRules().size() : 0
-                    );
-                    ReviewPrompt reviewPrompt = resolvedFilePathToPromptMapper.map(resolvedFRBatch, fileId, ruleId, sourceFileCache);
+                    logger.debug("Processing batch #{} of {} batches, prompt id: {}", batchIndex, totalBatches, reviewPrompt.getId());
 
-                    logger.debug(
-                            "Mapped ReviewPrompt for batch #{}: files count = {}, rules count = {}",
-                            batchIndex,
-                            reviewPrompt.getFiles() != null ? reviewPrompt.getFiles().size() : 0,
-                            reviewPrompt.getRules() != null ? reviewPrompt.getRules().size() : 0
-                    );
+                    // Pre-validation: Check if we've already exceeded quota before making LLM call
+                    if (tokensQuota != null) {
+                        ReviewedCompletionUsage currentUsage = quotaTracker.getCurrentUsage();
+                        LlmTokensQuotaValidator.validateTokenUsage(currentUsage, tokensQuota);
+                    }
 
-                    return llmReviewProcessor.process(
+                    final ReviewedResultItem reviewedResultItem = llmReviewProcessor.process(
                             reviewPrompt,
                             llmChatCompletionConfiguration,
                             messagesMapperConfiguration,
-                            llmClient
-                    );
+                            llmClient);
+
+                    if (tokensQuota != null) {
+                        // Thread-safe quota tracking after successful LLM call
+                        if (reviewedResultItem.getCompletionUsage() != null) {
+                            quotaTracker.addUsage(reviewedResultItem.getCompletionUsage());
+                        }
+                    }
+
+                    logger.debug("Processed batch #{} of {} batches, prompt id: {}", batchIndex, totalBatches, reviewPrompt.getId());
+                    return reviewedResultItem;
                 });
             }
 
-            // Submit tasks and collect results, now with NO timeout (wait until all complete)
+            // Submit tasks and collect results
             List<Future<ReviewedResultItem>> futures;
             try {
-                futures = executorService.invokeAll(callables); // <--- Without timeout!
+                if (timeoutDuration != null) {
+                    Duration elapsed = Duration.between(startTime, Instant.now());
+                    Duration remaining = timeoutDuration.minus(elapsed);
+                    futures = executorService.invokeAll(callables, remaining.toMillis(), TimeUnit.MILLISECONDS);
+                } else {
+                    futures = executorService.invokeAll(callables);
+                }
             } catch (InterruptedException e) {
-                logger.error("Batch group #{} interrupted during invokeAll: {}", batchNum, e.getMessage());
+                logger.error("Batch group #{} of {} batches interrupted during invokeAll: {}", batchNum, totalBatches, e.getMessage());
                 Thread.currentThread().interrupt();
-                throw new RuntimeException("Batch group interrupted", e);
+                throw new RuntimeException(String.format("Batch group #%d of %d batches interrupted", batchNum, totalBatches), e);
             }
 
             // Collect results
@@ -152,61 +343,91 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
                 Future<ReviewedResultItem> future = futures.get(j);
                 Instant taskStart = Instant.now();
                 try {
-                    ReviewedResultItem result = future.get(); // <--- Without timeout!
+                    ReviewedResultItem result;
+                    if (timeoutDuration != null) {
+                        result = future.get(0, TimeUnit.MILLISECONDS); // 0 means 'if done'
+                    } else {
+                        result = future.get();
+                    }
                     results.add(result);
                     long taskDuration = Duration.between(taskStart, Instant.now()).toMillis();
-                    logger.info("Batch #{} (parallel task in group {}) completed successfully. Duration: {} ms.", i + j, batchNum, taskDuration);
+                    logger.info("Batch #{} of {} batches (parallel task in group {}) completed successfully. Duration: {} ms.", i + j, totalBatches, batchNum, taskDuration);
                 } catch (CancellationException e) {
-                    logger.warn("Batch #{} was cancelled.", i + j);
+                    logger.warn("Batch #{} of {} batches was cancelled (possibly timed out)", i + j, totalBatches);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorCancellationException(
-                            String.format("Batch #%d was cancelled, error: '%s'", i + j, e.getMessage()), e
+                            String.format("Batch #%d of %d batches was cancelled or timed out, error: '%s'", i + j, totalBatches, e.getMessage()), e
+                    );
+                } catch (TimeoutException e) {
+                    logger.error("Batch #{} of {} batches timed out", i + j, totalBatches);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
+                    throw new TaskExecutorTimeoutException(
+                            String.format("Batch #%d of %d batches timed out, error: '%s'", i + j, totalBatches, e.getMessage()), e
                     );
                 } catch (ExecutionException e) {
-                    logger.error("Batch #{} failed with exception: '{}'", i + j, e.getMessage(), e);
+                    logger.error("Batch #{} of {} batches failed with exception: '{}'", i + j, totalBatches, e.getMessage(), e);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorException(
-                            String.format("Batch #%d failed: %s", i + j, e.getCause()), e.getCause());
+                            String.format("Batch #%d of %d batches failed: %s", i + j, totalBatches, e.getCause()), e.getCause());
                 } catch (InterruptedException e) {
-                    logger.error("Batch #{} was interrupted: {}", i + j, e.getMessage());
+                    logger.error("Batch #{} of {} batches was interrupted: {}", i + j, totalBatches, e.getMessage());
                     Thread.currentThread().interrupt();
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorInterruptedException(
-                            String.format("Batch #%d was interrupted: %s", i + j, e.getMessage()), e);
+                            String.format("Batch #%d of %d batches was interrupted: %s", i + j, totalBatches, e.getMessage()), e);
                 }
             }
 
             long batchDuration = Duration.between(batchStart, Instant.now()).toMillis();
-            logger.info("Parallel batch group #{} of {} ({} tasks) completed. Duration: {} ms.", batchNum, totalBatches, resolvedFilesRules.size(), batchDuration);
+            logger.info("Parallel batch group #{} of {} batches ({} tasks) completed. Duration: {} ms.", batchNum, totalBatches, prompts.size(), batchDuration);
         }
 
         long totalDuration = Duration.between(startTime, Instant.now()).toMillis();
+
+        // Log final quota usage if quota tracking was enabled
+        if (tokensQuota != null) {
+            ReviewedCompletionUsage finalUsage = quotaTracker.getCurrentUsage();
+            logger.info("Final cumulative token usage: completion={}, prompt={}, total={}",
+                    finalUsage.getCompletionTokens(), finalUsage.getPromptTokens(), finalUsage.getTotalTokens());
+        }
+
         logger.info(
-                "All batches processed successfully. Total reviewed: {}. Total duration: {} ms.",
+                "All batches processed successfully. Total batches: {}. Total prompts: {}. Total reviewed: {}. Total duration: {} ms.",
+                totalBatches,
+                reviewPrompts.size(),
                 results.size(),
                 totalDuration
         );
-
         return results;
     }
 
-    @Override
-    public List<ReviewedResultItem> dispatch(List<List<Rule>> rulesBatches,
-                                             List<List<ResolvedFilePath>> resolvedFilePathBatches,
-                                             LlmChatCompletionConfiguration llmChatCompletionConfiguration,
-                                             LlmMessagesMapperConfiguration messagesMapperConfiguration,
-                                             LlmClient llmClient,
-                                             int concurrency,
-                                             Duration timeoutDuration,
-                                             ExecutorService executorService) {
+    private List<ReviewedResultItem> processInternalWithLoadBalancing(
+            Boolean useReasoning,
+            List<List<Rule>> rulesBatches,
+            List<List<ResolvedFilePath>> resolvedFilePathBatches,
+            LlmChatCompletionConfiguration llmChatCompletionConfiguration,
+            LlmMessagesMapperConfiguration messagesMapperConfiguration,
+            List<LlmClient> llmClients,
+            LoadBalancingStrategy loadBalancingStrategy,
+            int concurrency,
+            Duration timeoutDuration,
+            ExecutorService executorService,
+            LlmTokensQuota tokensQuota) {
 
+        Objects.requireNonNull(useReasoning, "useReasoning must not be null");
         Objects.requireNonNull(rulesBatches, "rulesBatches must not be null");
         Objects.requireNonNull(resolvedFilePathBatches, "resolvedFilePathBatches must not be null");
         Objects.requireNonNull(llmChatCompletionConfiguration, "llmChatCompletionConfiguration must not be null");
         Objects.requireNonNull(messagesMapperConfiguration, "messagesMapperConfiguration must not be null");
-        Objects.requireNonNull(llmClient, "llmClient must not be null");
-        Objects.requireNonNull(timeoutDuration, "timeoutDuration must not be null");
+        Objects.requireNonNull(llmClients, "llmClients must not be null");
         Objects.requireNonNull(executorService, "executorService must not be null");
 
         if (concurrency < 1) {
-            throw new LLMCodeReviewException("Thread count cannot be less than 1");
+            throw new LLMCodeReviewRuntimeException("Thread count cannot be less than 1");
         }
 
         if (resolvedFilePathBatches.isEmpty()) {
@@ -214,8 +435,28 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
             return Collections.emptyList();
         }
 
-        logger.info("Starting multi-thread dispatch of {} file batches (concurrency = {}, timeout = {} ms)",
-                resolvedFilePathBatches.size(), concurrency, timeoutDuration.toMillis());
+        // Default to ROUND_ROBIN if strategy is null
+        LoadBalancingStrategy strategy = loadBalancingStrategy != null ? loadBalancingStrategy : LoadBalancingStrategy.ROUND_ROBIN;
+        
+        // Create state for round-robin if needed
+        final AtomicInteger roundRobinState = strategy == LoadBalancingStrategy.ROUND_ROBIN ? new AtomicInteger(0) : null;
+
+        // Initialize thread-safe quota tracker
+        final QuotaTracker quotaTracker = new ThreadSafeQuotaTrackerImpl();
+
+        String logMessage = timeoutDuration == null ?
+                "Starting multi-thread dispatch with load balancing of {} file batches (concurrency = {}, strategy = {}, clients = {}, no timeout)" :
+                "Starting multi-thread dispatch with load balancing of {} file batches (concurrency = {}, strategy = {}, clients = {}, timeout = {} ms)";
+
+        if (tokensQuota != null) {
+            logMessage = logMessage.replace("dispatch", "dispatch with thread-safe token quota validation");
+        }
+
+        if (timeoutDuration == null) {
+            logger.info(logMessage, resolvedFilePathBatches.size(), concurrency, strategy, llmClients.size());
+        } else {
+            logger.info(logMessage, resolvedFilePathBatches.size(), concurrency, strategy, llmClients.size(), timeoutDuration.toMillis());
+        }
 
         // Optional: warn if executorService may not have enough threads for desired concurrency
         if (executorService instanceof ThreadPoolExecutor) {
@@ -233,7 +474,7 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
         if (rulesBatches.isEmpty()) {
             logger.info("No rules batches provided. Each file batch will be processed with empty rule set.");
             resolvedFilePathBatches.forEach(rfp ->
-                    resolvedFilesRulesList.add(new ResolvedFilesRules(rfp, new ArrayList<>()))
+                    resolvedFilesRulesList.add(new ResolvedFilesRules(rfp, Collections.emptyList()))
             );
         } else {
             logger.info("Preparing Cartesian product of file batches and rule batches.");
@@ -246,114 +487,164 @@ public class MultiThreadTaskDispatcherImpl implements MultiThreadTaskDispatcher 
 
         logger.info("Prepared {} ResolvedFilesRules batches for processing.", resolvedFilesRulesList.size());
 
-        Map<String, SourceFile> sourceFileCache = new ConcurrentHashMap<>();
-        AtomicLong fileId = new AtomicLong();
-        AtomicLong ruleId = new AtomicLong();
+        final List<ReviewPrompt> reviewPrompts = reviewPromptCreator.create(resolvedFilesRulesList, useReasoning);
 
-        // Total number of parallel batch groups (used for progress logging)
-        int totalBatches = (resolvedFilesRulesList.size() + concurrency - 1) / concurrency;
+        int totalBatches = (reviewPrompts.size() + concurrency - 1) / concurrency;
 
-        for (int i = 0, batchNum = 0; i < resolvedFilesRulesList.size(); i += concurrency, batchNum++) {
-            Duration elapsed = Duration.between(startTime, Instant.now());
-            Duration remaining = timeoutDuration.minus(elapsed);
+        for (int i = 0, batchNum = 0; i < reviewPrompts.size(); i += concurrency, batchNum++) {
 
-            if (remaining.isNegative() || remaining.isZero()) {
-                logger.warn("Timeout reached before processing batch group #{}.", batchNum);
-                throw new TaskExecutorTimeoutException(
-                        String.format("Timeout after %d ms at batch group #%d", timeoutDuration.toMillis(), batchNum)
-                );
+            if (timeoutDuration != null) {
+                Duration elapsed = Duration.between(startTime, Instant.now());
+                Duration remaining = timeoutDuration.minus(elapsed);
+
+                if (remaining.isNegative() || remaining.isZero()) {
+                    logger.warn("Timeout reached before processing batch group #{} of {} batches.", batchNum, totalBatches);
+                    throw new TaskExecutorTimeoutException(
+                            String.format("Timeout after %d ms at batch group #%d of %d batches", timeoutDuration.toMillis(), batchNum, totalBatches)
+                    );
+                }
             }
 
             logger.info("Processing parallel batch group #{} of {}", batchNum, totalBatches);
 
             Instant batchStart = Instant.now();
 
-            List<ResolvedFilesRules> resolvedFilesRules =
-                    resolvedFilesRulesList.subList(i, Math.min(i + concurrency, resolvedFilesRulesList.size()));
+            List<ReviewPrompt> prompts = reviewPrompts.subList(i, Math.min(i + concurrency, reviewPrompts.size()));
             List<Callable<ReviewedResultItem>> callables = new ArrayList<>();
 
             // Prepare tasks for this batch group
-            for (int j = 0; j < resolvedFilesRules.size(); j++) {
+            for (int j = 0; j < prompts.size(); j++) {
                 final int batchIndex = i + j;
-                ResolvedFilesRules resolvedFRBatch = resolvedFilesRules.get(j);
+                ReviewPrompt reviewPrompt = prompts.get(j);
                 callables.add(() -> {
-                    logger.debug(
-                            "Processing batch #{}: {} files, {} rules",
-                            batchIndex,
-                            resolvedFRBatch.getResolvedFilePaths() != null ? resolvedFRBatch.getResolvedFilePaths().size() : 0,
-                            resolvedFRBatch.getRules() != null ? resolvedFRBatch.getRules().size() : 0
-                    );
-                    ReviewPrompt reviewPrompt = resolvedFilePathToPromptMapper.map(resolvedFRBatch, fileId, ruleId, sourceFileCache);
+                    logger.debug("Processing batch #{} of {} batches, prompt id: {}", batchIndex, totalBatches, reviewPrompt.getId());
 
-                    logger.debug(
-                            "Mapped ReviewPrompt for batch #{}: files count = {}, rules count = {}",
-                            batchIndex,
-                            reviewPrompt.getFiles() != null ? reviewPrompt.getFiles().size() : 0,
-                            reviewPrompt.getRules() != null ? reviewPrompt.getRules().size() : 0
-                    );
+                    // Pre-validation: Check if we've already exceeded quota before making LLM call
+                    if (tokensQuota != null) {
+                        ReviewedCompletionUsage currentUsage = quotaTracker.getCurrentUsage();
+                        LlmTokensQuotaValidator.validateTokenUsage(currentUsage, tokensQuota);
+                    }
 
-                    return llmReviewProcessor.process(
+                    // Select LLM client using load balancer
+                    LlmClient selectedClient;
+                    if (strategy == LoadBalancingStrategy.ROUND_ROBIN) {
+                        selectedClient = roundRobinLoadBalancer.findLlmClient(llmClients, roundRobinState);
+                    } else {
+                        selectedClient = randomLoadBalancer.findLlmClient(llmClients);
+                    }
+
+                    final ReviewedResultItem reviewedResultItem = llmReviewProcessor.process(
                             reviewPrompt,
                             llmChatCompletionConfiguration,
                             messagesMapperConfiguration,
-                            llmClient
-                    );
+                            selectedClient);
+
+                    if (tokensQuota != null) {
+                        // Thread-safe quota tracking after successful LLM call
+                        if (reviewedResultItem.getCompletionUsage() != null) {
+                            quotaTracker.addUsage(reviewedResultItem.getCompletionUsage());
+                        }
+                    }
+
+                    logger.debug("Processed batch #{} of {} batches, prompt id: {}", batchIndex, totalBatches, reviewPrompt.getId());
+                    return reviewedResultItem;
                 });
             }
 
-            // Submit tasks and collect results, enforcing remaining global timeout
+            // Submit tasks and collect results
             List<Future<ReviewedResultItem>> futures;
             try {
-                futures = executorService.invokeAll(callables, remaining.toMillis(), TimeUnit.MILLISECONDS);
+                if (timeoutDuration != null) {
+                    Duration elapsed = Duration.between(startTime, Instant.now());
+                    Duration remaining = timeoutDuration.minus(elapsed);
+                    futures = executorService.invokeAll(callables, remaining.toMillis(), TimeUnit.MILLISECONDS);
+                } else {
+                    futures = executorService.invokeAll(callables);
+                }
             } catch (InterruptedException e) {
-                logger.error("Batch group #{} interrupted during invokeAll: {}", batchNum, e.getMessage());
+                logger.error("Batch group #{} of {} batches interrupted during invokeAll: {}", batchNum, totalBatches, e.getMessage());
                 Thread.currentThread().interrupt();
-                throw new RuntimeException("Batch group interrupted", e);
+                throw new RuntimeException(String.format("Batch group #%d of %d batches interrupted", batchNum, totalBatches), e);
             }
 
-            // Collect results, fail-fast if any batch timed out
+            // Collect results
             for (int j = 0; j < futures.size(); j++) {
                 Future<ReviewedResultItem> future = futures.get(j);
                 Instant taskStart = Instant.now();
                 try {
-                    ReviewedResultItem result = future.get(0, TimeUnit.MILLISECONDS); // 0 means 'if done'
+                    ReviewedResultItem result;
+                    if (timeoutDuration != null) {
+                        result = future.get(0, TimeUnit.MILLISECONDS); // 0 means 'if done'
+                    } else {
+                        result = future.get();
+                    }
                     results.add(result);
                     long taskDuration = Duration.between(taskStart, Instant.now()).toMillis();
-                    logger.info("Batch #{} (parallel task in group {}) completed successfully. Duration: {} ms.", i + j, batchNum, taskDuration);
+                    logger.info("Batch #{} of {} batches (parallel task in group {}) completed successfully. Duration: {} ms.", i + j, totalBatches, batchNum, taskDuration);
                 } catch (CancellationException e) {
-                    logger.warn("Batch #{} was cancelled (possibly timed out)", i + j);
+                    logger.warn("Batch #{} of {} batches was cancelled (possibly timed out)", i + j, totalBatches);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorCancellationException(
-                            String.format("Batch #%d was cancelled or timed out, error: '%s'", i + j, e.getMessage()), e
+                            String.format("Batch #%d of %d batches was cancelled or timed out, error: '%s'", i + j, totalBatches, e.getMessage()), e
                     );
                 } catch (TimeoutException e) {
-                    logger.error("Batch #{} timed out after {} ms", i + j, remaining.toMillis());
-                    future.cancel(true);
+                    logger.error("Batch #{} of {} batches timed out", i + j, totalBatches);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorTimeoutException(
-                            String.format("Batch #%d timed out, error: '%s'", i + j, e.getMessage()), e
+                            String.format("Batch #%d of %d batches timed out, error: '%s'", i + j, totalBatches, e.getMessage()), e
                     );
                 } catch (ExecutionException e) {
-                    logger.error("Batch #{} failed with exception: '{}'", i + j, e.getMessage(), e);
+                    logger.error("Batch #{} of {} batches failed with exception: '{}'", i + j, totalBatches, e.getMessage(), e);
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorException(
-                            String.format("Batch #%d failed: %s", i + j, e.getCause()), e.getCause());
+                            String.format("Batch #%d of %d batches failed: %s", i + j, totalBatches, e.getCause()), e.getCause());
                 } catch (InterruptedException e) {
-                    logger.error("Batch #{} was interrupted: {}", i + j, e.getMessage());
+                    logger.error("Batch #{} of {} batches was interrupted: {}", i + j, totalBatches, e.getMessage());
                     Thread.currentThread().interrupt();
+                    // Cancel all remaining futures in this batch
+                    cancelRemainingFutures(futures, j);
                     throw new TaskExecutorInterruptedException(
-                            String.format("Batch #%d was interrupted: %s", i + j, e.getMessage()), e);
+                            String.format("Batch #%d of %d batches was interrupted: %s", i + j, totalBatches, e.getMessage()), e);
                 }
             }
 
             long batchDuration = Duration.between(batchStart, Instant.now()).toMillis();
-            logger.info("Parallel batch group #{} of {} ({} tasks) completed. Duration: {} ms.", batchNum, totalBatches, resolvedFilesRules.size(), batchDuration);
+            logger.info("Parallel batch group #{} of {} batches ({} tasks) completed. Duration: {} ms.", batchNum, totalBatches, prompts.size(), batchDuration);
         }
 
         long totalDuration = Duration.between(startTime, Instant.now()).toMillis();
+
+        // Log final quota usage if quota tracking was enabled
+        if (tokensQuota != null) {
+            ReviewedCompletionUsage finalUsage = quotaTracker.getCurrentUsage();
+            logger.info("Final cumulative token usage: completion={}, prompt={}, total={}",
+                    finalUsage.getCompletionTokens(), finalUsage.getPromptTokens(), finalUsage.getTotalTokens());
+        }
+
         logger.info(
-                "All batches processed successfully. Total reviewed: {}. Total duration: {} ms.",
+                "All batches processed successfully with load balancing. Strategy: {}. Total batches: {}. Total prompts: {}. Total reviewed: {}. Total duration: {} ms.",
+                strategy,
+                totalBatches,
+                reviewPrompts.size(),
                 results.size(),
                 totalDuration
         );
-
         return results;
+    }
+
+    /**
+     * Cancels all remaining futures starting from the specified index to prevent resource leaks
+     */
+    private void cancelRemainingFutures(List<Future<ReviewedResultItem>> futures, int startIndex) {
+        for (int k = startIndex; k < futures.size(); k++) {
+            Future<ReviewedResultItem> futureToCancel = futures.get(k);
+            if (!futureToCancel.isDone()) {
+                boolean cancelled = futureToCancel.cancel(true);
+                logger.debug("Cancelled future #{}: {}", k, cancelled);
+            }
+        }
     }
 }

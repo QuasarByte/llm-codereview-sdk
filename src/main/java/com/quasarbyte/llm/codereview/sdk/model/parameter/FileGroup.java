@@ -5,6 +5,7 @@ import java.util.List;
 public class FileGroup {
     private String fileGroupName;
     private List<String> paths;
+    private List<String> excludePaths;
     private Integer filesBatchSize;
     private List<Rule> rules;
     private List<String> fileGroupPrompts;
@@ -25,6 +26,15 @@ public class FileGroup {
 
     public FileGroup setPaths(List<String> paths) {
         this.paths = paths;
+        return this;
+    }
+
+    public List<String> getExcludePaths() {
+        return excludePaths;
+    }
+
+    public FileGroup setExcludePaths(List<String> excludePaths) {
+        this.excludePaths = excludePaths;
         return this;
     }
 

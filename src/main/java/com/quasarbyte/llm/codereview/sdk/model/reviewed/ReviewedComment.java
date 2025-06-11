@@ -4,6 +4,8 @@ import com.quasarbyte.llm.codereview.sdk.model.prompt.PromptRule;
 
 public class ReviewedComment {
     private PromptRule rule;
+    private Long ruleId;
+    private String ruleCode;
     private Integer line;
     private Integer column;
     private String message;
@@ -15,6 +17,24 @@ public class ReviewedComment {
 
     public ReviewedComment setRule(PromptRule rule) {
         this.rule = rule;
+        return this;
+    }
+
+    public Long getRuleId() {
+        return ruleId;
+    }
+
+    public ReviewedComment setRuleId(Long ruleId) {
+        this.ruleId = ruleId;
+        return this;
+    }
+
+    public String getRuleCode() {
+        return ruleCode;
+    }
+
+    public ReviewedComment setRuleCode(String ruleCode) {
+        this.ruleCode = ruleCode;
         return this;
     }
 

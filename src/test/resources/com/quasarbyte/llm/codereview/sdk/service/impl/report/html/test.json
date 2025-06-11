@@ -1,0 +1,199 @@
+{
+  "items": [
+    {
+      "file": {
+        "fileName": "document-search.component.ts",
+        "filePath": "C:\\temp\\document-search.component.ts",
+        "size": 4985,
+        "createdAt": "2025-06-10T23:47:48",
+        "modifiedAt": "2025-06-06T18:33:08",
+        "accessedAt": "2025-06-14T17:36:17"
+      },
+      "comments": [
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 13,
+          "column": 0,
+          "message": "Unused import: 'HttpErrorResponse' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 14,
+          "column": 0,
+          "message": "Unused import: 'Router' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 15,
+          "column": 0,
+          "message": "Unused import: 'FormControl', 'FormGroup', 'Validators' are not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 17,
+          "column": 0,
+          "message": "Unused import: 'first' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 36,
+          "column": 0,
+          "message": "Unused import: 'AlertProjection' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 37,
+          "column": 0,
+          "message": "Unused import: 'AlertSearchFormControl' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 38,
+          "column": 0,
+          "message": "Unused import: 'AlertSearchFormGroup' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 39,
+          "column": 0,
+          "message": "Unused import: 'AlertSearchParameter' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 40,
+          "column": 0,
+          "message": "Unused import: 'LookupNumberString' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 45,
+          "column": 0,
+          "message": "Unused import: 'AlertsService' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 46,
+          "column": 0,
+          "message": "Unused import: 'DialogService' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 47,
+          "column": 0,
+          "message": "Unused import: 'Router' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        },
+        {
+          "rule": {
+            "code": "UNUSED_IMPORTS",
+            "description": "Imported modules, functions, classes, constants, or variables are not used in the code",
+            "severity": "WARNING"
+          },
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "line": 12,
+          "column": 0,
+          "message": "Unused import: 'HttpErrorResponse' is not used in the code.",
+          "suggestion": "Remove unused imports to keep the code clean and avoid potential issues."
+        }
+      ],
+      "thinkSteps": [
+        {
+          "fileId": 0,
+          "fileName": "alerts-search.component.ts",
+          "ruleId": 2,
+          "ruleCode": "UNUSED_IMPORTS",
+          "thinkText": "Looking at the imports in 'alerts-search.component.ts', I see several modules and classes that are imported but not used. For example, 'HttpErrorResponse' is imported from '@angular/common/http' but isn't referenced anywhere else in the component. Similarly, 'Router' is imported but not used for navigation or routing. The same applies to other imports like 'FormControl', 'FormGroup', and 'Validators'. These unused imports can be removed to keep the code clean and avoid potential issues."
+        }
+      ]
+    }
+  ],
+  "completionUsage": {
+    "completionTokens": 2234,
+    "promptTokens": 1391,
+    "totalTokens": 3625
+  }
+}

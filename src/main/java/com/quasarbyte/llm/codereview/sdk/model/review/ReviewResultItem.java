@@ -3,8 +3,9 @@ package com.quasarbyte.llm.codereview.sdk.model.review;
 import java.util.List;
 
 public class ReviewResultItem {
-    ReviewFile file;
-    List<ReviewComment> comments;
+    private ReviewFile file;
+    private List<ReviewComment> comments;
+    private List<ReviewThinkStep> thinkSteps;
 
     public ReviewFile getFile() {
         return file;
@@ -21,6 +22,15 @@ public class ReviewResultItem {
 
     public ReviewResultItem setComments(List<ReviewComment> comments) {
         this.comments = comments;
+        return this;
+    }
+
+    public List<ReviewThinkStep> getThinkSteps() {
+        return thinkSteps;
+    }
+
+    public ReviewResultItem setThinkSteps(List<ReviewThinkStep> thinkSteps) {
+        this.thinkSteps = thinkSteps;
         return this;
     }
 }

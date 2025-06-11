@@ -3,9 +3,9 @@ package com.quasarbyte.llm.codereview.sdk.model.parameter;
 import com.quasarbyte.llm.codereview.sdk.exception.LLMCodeReviewRhinoException;
 
 public enum RuleSeverityEnum {
-    INFO,
+    CRITICAL,
     WARNING,
-    CRITICAL;
+    INFO;
 
     public static RuleSeverityEnum fromName(String name) {
         for (RuleSeverityEnum value : RuleSeverityEnum.values()) {

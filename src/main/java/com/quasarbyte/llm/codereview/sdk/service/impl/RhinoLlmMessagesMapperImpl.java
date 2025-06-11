@@ -122,7 +122,7 @@ public class RhinoLlmMessagesMapperImpl implements LlmMessagesMapper {
                     String role = getRequiredStringField(jsMsg, FIELD_NAME_ROLE);
                     String content = getRequiredStringField(jsMsg, FIELD_NAME_CONTENT);
                     result.add(new LlmMessage().setRole(LlmMessageRoleEnum.fromRole(role)).setContent(content));
-                    logger.debug("Parsed message [{}]: role={}, content size={}", i, role, content != null ? content.length() : 0);
+                    logger.trace("Parsed message [{}]: role={}, content size={}", i, role, content != null ? content.length() : 0);
                 } catch (Exception e) {
                     logger.error("Cannot handle message with index {}. Error: {}", i, e.getMessage(), e);
                     throw new LLMCodeReviewRhinoException(String.format("Can not handle message with index %d. Error message: %s", i, e.getMessage()), e);

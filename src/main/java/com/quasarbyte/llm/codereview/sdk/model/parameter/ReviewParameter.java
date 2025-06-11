@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.List;
 
 public class ReviewParameter {
+    private Long reviewId;
     private String reviewName;
     private List<Rule> rules;
     private List<ReviewTarget> targets;
@@ -17,6 +18,16 @@ public class ReviewParameter {
     private Integer rulesBatchSize;
     private Duration timeoutDuration;
     private LlmQuota llmQuota;
+    private Boolean useReasoning;
+
+    public Long getReviewId() {
+        return reviewId;
+    }
+
+    public ReviewParameter setReviewId(Long reviewId) {
+        this.reviewId = reviewId;
+        return this;
+    }
 
     public String getReviewName() {
         return reviewName;
@@ -105,6 +116,15 @@ public class ReviewParameter {
 
     public ReviewParameter setLlmQuota(LlmQuota llmQuota) {
         this.llmQuota = llmQuota;
+        return this;
+    }
+
+    public Boolean getUseReasoning() {
+        return useReasoning;
+    }
+
+    public ReviewParameter setUseReasoning(Boolean useReasoning) {
+        this.useReasoning = useReasoning;
         return this;
     }
 }

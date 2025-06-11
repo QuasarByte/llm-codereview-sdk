@@ -62,7 +62,7 @@ public class ResolvedFilePathSplitterImpl implements ResolvedFilePathSplitter {
 
         if (filesBatchSize <= 0 || filesBatchSize >= allResolvedPaths.size()) {
             if (filesBatchSize <= 0) {
-                logger.warn("Batch size is zero or negative ({}); returning all paths as a single batch", filesBatchSize);
+                logger.info("Batch size is zero or negative ({}); returning all paths as a single batch", filesBatchSize);
             } else {
                 logger.info("Batch size ({}) >= total files ({}); returning all paths as a single batch", filesBatchSize, allResolvedPaths.size());
             }

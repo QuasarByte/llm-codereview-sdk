@@ -3,13 +3,23 @@ package com.quasarbyte.llm.codereview.sdk.model.prompt;
 import java.util.List;
 
 public class ReviewPrompt {
+    private Long id;
     private List<String> fileGroupPromptTexts;
     private List<String> reviewTargetPromptTexts;
     private List<String> reviewPromptTexts;
     private List<String> systemPromptTexts;
     private List<PromptRule> rules;
     private List<PromptFile> files;
-    private ReviewPromptExecutionDetails executionDetails;
+    private Boolean useReasoning;
+
+    public Long getId() {
+        return id;
+    }
+
+    public ReviewPrompt setId(Long id) {
+        this.id = id;
+        return this;
+    }
 
     public List<String> getFileGroupPromptTexts() {
         return fileGroupPromptTexts;
@@ -65,12 +75,12 @@ public class ReviewPrompt {
         return this;
     }
 
-    public ReviewPromptExecutionDetails getExecutionDetails() {
-        return executionDetails;
+    public Boolean getUseReasoning() {
+        return useReasoning;
     }
 
-    public ReviewPrompt setExecutionDetails(ReviewPromptExecutionDetails executionDetails) {
-        this.executionDetails = executionDetails;
+    public ReviewPrompt setUseReasoning(Boolean useReasoning) {
+        this.useReasoning = useReasoning;
         return this;
     }
 }

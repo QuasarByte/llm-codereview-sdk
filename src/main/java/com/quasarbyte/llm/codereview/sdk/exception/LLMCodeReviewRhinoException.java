@@ -1,6 +1,6 @@
 package com.quasarbyte.llm.codereview.sdk.exception;
 
-public class LLMCodeReviewRhinoException extends LLMCodeReviewException {
+public class LLMCodeReviewRhinoException extends LLMCodeReviewRuntimeException {
     public LLMCodeReviewRhinoException(String message) {
         super(message);
     }

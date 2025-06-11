@@ -1,6 +1,6 @@
 package com.quasarbyte.llm.codereview.sdk.exception;
 
-public class TaskExecutorInterruptedException extends LLMCodeReviewException {
+public class TaskExecutorInterruptedException extends LLMCodeReviewRuntimeException {
     public TaskExecutorInterruptedException(String message) {
         super(message);
     }

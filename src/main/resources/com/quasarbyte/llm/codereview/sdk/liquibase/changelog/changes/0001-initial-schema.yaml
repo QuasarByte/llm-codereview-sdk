@@ -1,0 +1,467 @@
+databaseChangeLog:
+  - changeSet:
+      id: 100
+      author: system
+      comment: Create review table
+      changes:
+        - createTable:
+            tableName: review
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+  - changeSet:
+      id: 200
+      author: system
+      comment: Create file table
+      changes:
+        - createTable:
+            tableName: file
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_name_extension
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_path
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: content
+                  type: BLOB
+                  constraints:
+                    nullable: true
+              - column:
+                  name: size
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+              - column:
+                  name: modified_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+              - column:
+                  name: accessed_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 300
+      author: system
+      comment: Create rule table
+      changes:
+        - createTable:
+            tableName: rule
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: code
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: description
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: severity
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 400
+      author: system
+      comment: Create prompt table
+      changes:
+        - createTable:
+            tableName: prompt
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_prompt
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 500
+      author: system
+      comment: Create run table
+      changes:
+        - createTable:
+            tableName: run
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_parameter
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 600
+      author: system
+      comment: Create inference table
+      changes:
+        - createTable:
+            tableName: inference
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: run_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: prompt_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: reviewed_result_item
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 700
+      author: system
+      comment: Create review_target table
+      changes:
+        - createTable:
+            tableName: review_target
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: review_target
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 800
+      author: system
+      comment: Create file_group table
+      changes:
+        - createTable:
+            tableName: file_group
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: target_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_group
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 900
+      author: system
+      comment: Create resolved_file table
+      changes:
+        - createTable:
+            tableName: resolved_file
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: file_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: group_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: target_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_name_extension
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: file_path
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: code_page
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 1000
+      author: system
+      comment: Create review_result table
+      changes:
+        - createTable:
+            tableName: review_result
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: run_id
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: review_parameter
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: review_result
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 1100
+      author: system
+      comment: Create indexes for all tables
+      changes:
+        - createIndex:
+            tableName: file_group
+            indexName: idx_file_group_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: file_group
+            indexName: idx_file_group_target_id
+            columns:
+              - column:
+                  name: target_id
+        - createIndex:
+            tableName: file
+            indexName: idx_file_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: rule
+            indexName: idx_rule_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: prompt
+            indexName: idx_prompt_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: run
+            indexName: idx_run_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: inference
+            indexName: idx_inference_run_id
+            columns:
+              - column:
+                  name: run_id
+        - createIndex:
+            tableName: inference
+            indexName: idx_inference_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: inference
+            indexName: idx_inference_prompt_id
+            columns:
+              - column:
+                  name: prompt_id
+        - createIndex:
+            tableName: inference
+            indexName: idx_inference_status
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            tableName: review_target
+            indexName: idx_review_target_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: resolved_file
+            indexName: idx_resolved_file_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: resolved_file
+            indexName: idx_resolved_file_group_id
+            columns:
+              - column:
+                  name: group_id
+        - createIndex:
+            tableName: resolved_file
+            indexName: idx_resolved_file_target_id
+            columns:
+              - column:
+                  name: target_id
+        - createIndex:
+            tableName: resolved_file
+            indexName: idx_resolved_file_file_id
+            columns:
+              - column:
+                  name: file_id
+        - createIndex:
+            tableName: review_result
+            indexName: idx_review_result_review_id
+            columns:
+              - column:
+                  name: review_id
+        - createIndex:
+            tableName: review_result
+            indexName: idx_review_result_run_id
+            columns:
+              - column:
+                  name: run_id

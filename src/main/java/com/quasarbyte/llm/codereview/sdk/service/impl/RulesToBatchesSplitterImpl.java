@@ -25,7 +25,7 @@ public class RulesToBatchesSplitterImpl implements RulesToBatchesSplitter {
 
         int actualBatchSize = (batchSize == null || batchSize <= 0) ? rules.size() : batchSize;
         if (batchSize == null || batchSize <= 0) {
-            logger.warn("Provided batch size is null or non-positive ({}). Using rules.size() as batch size: {}", batchSize, actualBatchSize);
+            logger.info("Provided batch size is null or non-positive ({}). Using rules.size() as batch size: {}", batchSize, actualBatchSize);
         }
 
         List<List<Rule>> batches = new ArrayList<>();

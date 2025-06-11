@@ -1,20 +1,13 @@
 package com.quasarbyte.llm.codereview.sdk.model.reviewed;
 
+import com.quasarbyte.llm.codereview.sdk.model.llm.ThinkStep;
+
 import java.util.List;
 
 public class ReviewedResultItem {
-    private ReviewedExecutionDetailsItem executionDetailsItem;
     private List<ReviewedFile> files;
+    private List<ThinkStep> thinkSteps;
     private ReviewedCompletionUsage completionUsage;
-
-    public ReviewedExecutionDetailsItem getExecutionDetailsItem() {
-        return executionDetailsItem;
-    }
-
-    public ReviewedResultItem setExecutionDetailsItem(ReviewedExecutionDetailsItem executionDetailsItem) {
-        this.executionDetailsItem = executionDetailsItem;
-        return this;
-    }
 
     public List<ReviewedFile> getFiles() {
         return files;
@@ -22,6 +15,15 @@ public class ReviewedResultItem {
 
     public ReviewedResultItem setFiles(List<ReviewedFile> files) {
         this.files = files;
+        return this;
+    }
+
+    public List<ThinkStep> getThinkSteps() {
+        return thinkSteps;
+    }
+
+    public ReviewedResultItem setThinkSteps(List<ThinkStep> thinkSteps) {
+        this.thinkSteps = thinkSteps;
         return this;
     }
 

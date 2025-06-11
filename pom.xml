@@ -6,7 +6,7 @@
 
     <groupId>com.quasarbyte.llm.codereview</groupId>
     <artifactId>sdk</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
     <url>https://github.com/QuasarByte/llm-codereview-sdk</url>
 
     <name>LLM Code Review SDK</name>
@@ -21,7 +21,7 @@
         <developer>
             <id>taluyev</id>
             <name>Roman Taluyev</name>
-            <email>taluyev@gmail.com</email>
+            <email>taluyev+llm-code-review@gmail.com</email>
             <organization>Roman Taluyev</organization>
             <url>https://www.linkedin.com/in/taluyev/</url>
         </developer>
@@ -34,18 +34,25 @@
     </scm>
 
     <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
     </properties>
 
     <dependencies>
+        <!-- Jackson for JSON processing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.openai/openai-java -->
         <dependency>
             <groupId>com.openai</groupId>
             <artifactId>openai-java</artifactId>
-            <version>2.2.0</version>
+            <version>2.7.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.mozilla/rhino -->
         <dependency>
@@ -53,10 +60,64 @@
             <artifactId>rhino</artifactId>
             <version>1.7.15</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.samskivert</groupId>
+            <artifactId>jmustache</artifactId>
+            <version>1.15</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.googlecode.owasp-java-html-sanitizer/owasp-java-html-sanitizer -->
+        <dependency>
+            <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+            <artifactId>owasp-java-html-sanitizer</artifactId>
+            <version>20211018.2</version>
+        </dependency>
+
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>2.0.17</version>
+        </dependency>
+
+        <!-- Bridge Java Util Logging to SLF4J for Liquibase -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>2.0.17</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.zaxxer/HikariCP -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>4.0.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.4</version>
+        </dependency>
+
+        <!-- SQLite -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.46.1.2</version>
+        </dependency>
+
+        <!-- H2 Database for integration testing -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.liquibase/liquibase-core -->
+        <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+            <version>4.32.0</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -82,6 +143,47 @@
             <version>${mockito.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- SLF4J simple implementation for tests -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.17</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.20.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <version>1.20.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.33</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>1.20.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.5</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -104,6 +206,9 @@
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <test.db.type>${test.db.type}</test.db.type>
+                    </systemPropertyVariables>
                 </configuration>
                 <executions>
                     <execution>
@@ -130,5 +235,46 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>test-memory</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <test.db.type>memory</test.db.type>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>test-temp</id>
+            <properties>
+                <test.db.type>temp</test.db.type>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>test-target</id>
+            <properties>
+                <test.db.type>target</test.db.type>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>test-mysql</id>
+            <properties>
+                <test.db.type>mysql</test.db.type>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>test-postgresql</id>
+            <properties>
+                <test.db.type>postgresql</test.db.type>
+            </properties>
+        </profile>
+
+    </profiles>
 
 </project>

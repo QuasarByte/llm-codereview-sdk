@@ -1,6 +1,6 @@
 package com.quasarbyte.llm.codereview.sdk.exception;
 
-public class TaskExecutorException extends LLMCodeReviewException {
+public class TaskExecutorException extends LLMCodeReviewRuntimeException {
     public TaskExecutorException(String message) {
         super(message);
     }

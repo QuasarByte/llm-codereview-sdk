@@ -4,6 +4,8 @@ import com.quasarbyte.llm.codereview.sdk.model.parameter.Rule;
 
 public class ReviewComment {
     private Rule rule;
+    private Long ruleId;
+    private String ruleCode;
     private Integer line;
     private Integer column;
     private String message;
@@ -15,6 +17,24 @@ public class ReviewComment {
 
     public ReviewComment setRule(Rule rule) {
         this.rule = rule;
+        return this;
+    }
+
+    public Long getRuleId() {
+        return ruleId;
+    }
+
+    public ReviewComment setRuleId(Long ruleId) {
+        this.ruleId = ruleId;
+        return this;
+    }
+
+    public String getRuleCode() {
+        return ruleCode;
+    }
+
+    public ReviewComment setRuleCode(String ruleCode) {
+        this.ruleCode = ruleCode;
         return this;
     }
 

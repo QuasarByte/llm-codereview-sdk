@@ -1,41 +1,71 @@
 package com.quasarbyte.llm.codereview.sdk.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quasarbyte.llm.codereview.sdk.exception.db.NotFoundException;
 import com.quasarbyte.llm.codereview.sdk.model.RuleKey;
 import com.quasarbyte.llm.codereview.sdk.model.SourceFile;
-import com.quasarbyte.llm.codereview.sdk.model.parameter.FileGroup;
-import com.quasarbyte.llm.codereview.sdk.model.parameter.ReviewParameter;
-import com.quasarbyte.llm.codereview.sdk.model.parameter.ReviewTarget;
-import com.quasarbyte.llm.codereview.sdk.model.parameter.Rule;
+import com.quasarbyte.llm.codereview.sdk.model.context.ReviewRunDetails;
+import com.quasarbyte.llm.codereview.sdk.model.db.FileDB;
+import com.quasarbyte.llm.codereview.sdk.model.db.PromptDB;
+import com.quasarbyte.llm.codereview.sdk.model.db.ResolvedFileDB;
+import com.quasarbyte.llm.codereview.sdk.model.parameter.*;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.PromptFile;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.PromptRule;
 import com.quasarbyte.llm.codereview.sdk.model.prompt.ReviewPrompt;
-import com.quasarbyte.llm.codereview.sdk.model.prompt.ReviewPromptExecutionDetails;
+import com.quasarbyte.llm.codereview.sdk.model.prompt.ReviewPromptJson;
 import com.quasarbyte.llm.codereview.sdk.model.resolved.*;
+import com.quasarbyte.llm.codereview.sdk.repository.FileRepository;
+import com.quasarbyte.llm.codereview.sdk.repository.PromptRepository;
+import com.quasarbyte.llm.codereview.sdk.repository.ResolvedFileRepository;
 import com.quasarbyte.llm.codereview.sdk.service.ResolvedFilePathToPromptMapper;
-import com.quasarbyte.llm.codereview.sdk.service.SourceFileReader;
+import com.quasarbyte.llm.codereview.sdk.service.ReviewRunContext;
+import com.quasarbyte.llm.codereview.sdk.service.RuleService;
+import com.quasarbyte.llm.codereview.sdk.service.SourceFileService;
+import com.quasarbyte.llm.codereview.sdk.service.mapper.ReviewPromptJsonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class ResolvedFilePathToPromptMapperImpl implements ResolvedFilePathToPromptMapper {
 
     private static final Logger logger = LoggerFactory.getLogger(ResolvedFilePathToPromptMapperImpl.class);
 
-    private final SourceFileReader sourceFileReader;
+    private final FileRepository fileRepository;
+    private final ObjectMapper objectMapper;
+    private final PromptRepository promptRepository;
+    private final ResolvedFileRepository resolvedFileRepository;
+    private final ReviewPromptJsonMapper reviewPromptJsonMapper;
+    private final ReviewRunContext reviewRunContext;
+    private final RuleService ruleService;
+    private final SourceFileService sourceFileService;
 
-    public ResolvedFilePathToPromptMapperImpl(SourceFileReader sourceFileReader) {
-        this.sourceFileReader = sourceFileReader;
-        logger.debug("Initialized ResolvedFilePathToPromptMapperImpl with SourceFileReader: {}", sourceFileReader);
+    public ResolvedFilePathToPromptMapperImpl(FileRepository fileRepository,
+                                              ObjectMapper objectMapper,
+                                              PromptRepository promptRepository,
+                                              ResolvedFileRepository resolvedFileRepository,
+                                              ReviewPromptJsonMapper reviewPromptJsonMapper,
+                                              ReviewRunContext reviewRunContext,
+                                              RuleService ruleService,
+                                              SourceFileService sourceFileService) {
+        this.fileRepository = fileRepository;
+        this.objectMapper = objectMapper;
+        this.promptRepository = promptRepository;
+        this.resolvedFileRepository = resolvedFileRepository;
+        this.reviewPromptJsonMapper = reviewPromptJsonMapper;
+        this.reviewRunContext = reviewRunContext;
+        this.ruleService = ruleService;
+        this.sourceFileService = sourceFileService;
     }
 
     @Override
     public ReviewPrompt map(ResolvedFilesRules filesRules,
-                            AtomicLong fileId,
-                            AtomicLong ruleId,
-                            Map<String, SourceFile> sourceFileCache) {
+                            Boolean useReasoning) {
         logger.info("Mapping ResolvedFilesRules to ReviewPrompt...");
         List<ResolvedFilePath> paths = filesRules.getResolvedFilePaths();
         List<Rule> rules = filesRules.getRules();
@@ -45,8 +75,7 @@ public class ResolvedFilePathToPromptMapperImpl implements ResolvedFilePathToPro
                 rules == null ? 0 : rules.size());
 
         ReviewPrompt reviewPrompt = new ReviewPrompt()
-                .setExecutionDetails(new ReviewPromptExecutionDetails()
-                        .setResolvedFilePaths(paths));
+                .setUseReasoning(useReasoning);
 
         if (paths != null && !paths.isEmpty()) {
             logger.debug("Processing non-empty paths for prompt construction.");
@@ -73,7 +102,7 @@ public class ResolvedFilePathToPromptMapperImpl implements ResolvedFilePathToPro
             if (rules != null && !rules.isEmpty()) {
                 promptRules = rules
                         .stream()
-                        .map(rule -> mapRule(rule, ruleId))
+                        .map(this::mapRule)
                         .collect(Collectors.toList());
             } else {
                 promptRules = Collections.emptyList();
@@ -82,7 +111,7 @@ public class ResolvedFilePathToPromptMapperImpl implements ResolvedFilePathToPro
             reviewPrompt.setRules(promptRules);
 
             List<PromptFile> files = paths.stream()
-                    .map(rfp -> mapFile(rfp, fileId, sourceFileCache))
+                    .map(this::mapFile)
                     .collect(Collectors.toList());
             reviewPrompt.setFiles(files);
 
@@ -92,53 +121,119 @@ public class ResolvedFilePathToPromptMapperImpl implements ResolvedFilePathToPro
             reviewPrompt.setFiles(Collections.emptyList());
         }
 
-        logger.debug("ReviewPrompt mapping complete: {}", reviewPrompt);
+        ReviewPromptJson reviewPromptJson = reviewPromptJsonMapper.toJson(reviewPrompt);
+
+        ReviewRunDetails reviewRunDetails = Objects.requireNonNull(reviewRunContext.getRunDetails(), "ReviewRunDetails cannot be null.");
+        Long reviewId = Objects.requireNonNull(reviewRunDetails.getReviewId(), "Review ID cannot be null.");
+
+        PromptDB promptDB = new PromptDB()
+                .setReviewId(reviewId)
+                .setReviewPrompt(reviewPromptJson);
+
+        Long promptId = promptRepository.save(promptDB);
+
+        reviewPrompt.setId(promptId);
+
+        logger.debug("ReviewPrompt mapping complete.");
         return reviewPrompt;
     }
 
-    private PromptFile mapFile(ResolvedFilePath resolvedFilePath, AtomicLong fileId, Map<String, SourceFile> sourceFileCache) {
+    private PromptFile mapFile(ResolvedFilePath resolvedFilePath) {
         logger.debug("Mapping PromptFile for path: {}", resolvedFilePath.getResolvedPath());
-        final SourceFile sourceFile = getSourceFile(resolvedFilePath, sourceFileCache);
-        long id = fileId.get();
-        logger.trace("Assigning fileId {} to PromptFile", id);
+        final SourceFile sourceFile = getSourceFile(resolvedFilePath);
+
+        ReviewRunDetails reviewRunDetails = reviewRunContext.getRunDetails();
+        Objects.requireNonNull(reviewRunDetails, "reviewRunDetails cannot be null.");
+        PersistenceConfiguration persistenceConfiguration = reviewRunDetails.getPersistenceConfiguration();
+        Objects.requireNonNull(persistenceConfiguration, "persistenceConfiguration cannot be null.");
+
+        final boolean persistFileContent;
+
+        if (persistenceConfiguration.getPersistFileContent() != null) {
+            persistFileContent = persistenceConfiguration.getPersistFileContent();
+            logger.debug("Persist file content condition (from parameter): {}", persistFileContent);
+        } else {
+            persistFileContent = false;
+            logger.debug("Persist file content condition (by default): {}", false);
+        }
+
+        final Long fileId;
+        if (!fileRepository.existsByFilePath(resolvedFilePath.getResolvedPath())) {
+            FileDB fileDB = new FileDB()
+                    .setReviewId(resolvedFilePath.getResolvedFileGroupPath().getResolvedFileGroup().getResolvedReviewTarget().getReviewId())
+                    .setFileName(sourceFile.getFileName())
+                    .setFileNameExtension(sourceFile.getFileNameExtension())
+                    .setFilePath(sourceFile.getFilePath())
+                    .setContent(persistFileContent ? sourceFile.getContent() : null)
+                    .setSize(sourceFile.getSize())
+                    .setCreatedAt(sourceFile.getCreatedAt())
+                    .setModifiedAt(sourceFile.getModifiedAt())
+                    .setAccessedAt(sourceFile.getAccessedAt());
+
+            fileId = fileRepository.save(fileDB);
+            logger.debug("Created new FileDB with ID: {} for path: {}", fileId, resolvedFilePath.getResolvedPath());
+        } else {
+            // File already exists, find its ID
+            Optional<FileDB> existingFile = fileRepository.findByFilePath(resolvedFilePath.getResolvedPath());
+            if (existingFile.isPresent()) {
+                fileId = existingFile.get().getId();
+                logger.debug("Found existing FileDB with ID: {} for path: {}", fileId, resolvedFilePath.getResolvedPath());
+            } else {
+                logger.error("File exists check passed but could not retrieve FileDB for path: {}", resolvedFilePath.getResolvedPath());
+                throw new NotFoundException("FileDB with path: " + resolvedFilePath.getResolvedPath() + " not found.");
+            }
+        }
+
+        ResolvedFileDB resolvedFileDB = new ResolvedFileDB()
+                .setFileId(fileId)
+                .setGroupId(resolvedFilePath.getResolvedFileGroupPath().getResolvedFileGroup().getId())
+                .setTargetId(resolvedFilePath.getResolvedFileGroupPath().getResolvedFileGroup().getResolvedReviewTarget().getId())
+                .setReviewId(resolvedFilePath.getResolvedFileGroupPath().getResolvedFileGroup().getResolvedReviewTarget().getReviewId())
+                .setFileName(sourceFile.getFileName())
+                .setFileNameExtension(sourceFile.getFileNameExtension())
+                .setFilePath(sourceFile.getFilePath())
+                .setCodePage(sourceFile.getCodePage());
+
+        long id = resolvedFileRepository.save(resolvedFileDB);
+
+        logger.trace("Assigning resolvedFileId {} to PromptFile (linked to fileId {})", id, fileId);
         PromptFile pf = new PromptFile()
-                .setId(fileId.getAndIncrement())
-                .setResolvedFilePath(resolvedFilePath)
+                .setId(id)
                 .setSourceFile(sourceFile);
-        logger.debug("Created PromptFile with id: {}", id);
+        logger.debug("Created PromptFile with id: {} (linked to fileId: {})", id, fileId);
         return pf;
     }
 
-    private SourceFile getSourceFile(ResolvedFilePath resolvedFilePath, Map<String, SourceFile> sourceFileCache) {
+    private SourceFile getSourceFile(ResolvedFilePath resolvedFilePath) {
         String path = resolvedFilePath.getResolvedPath();
         String codePage = getCodePage(resolvedFilePath);
         logger.debug("Getting SourceFile for path: {} (codePage: {})", path, codePage);
-
-        final SourceFile sourceFile;
-        if (!sourceFileCache.containsKey(path)) {
-            logger.info("Cache miss for SourceFile path: {}. Reading from SourceFileReader.", path);
-            sourceFile = sourceFileReader.readFile(path, codePage);
-            if (sourceFile != null) {
-                logger.debug("Read SourceFile for path: {} successfully.", path);
-                sourceFileCache.put(path, sourceFile);
-            } else {
-                logger.warn("Failed to read SourceFile for path: {}", path);
-            }
-        } else {
-            logger.debug("Cache hit for SourceFile path: {}", path);
-            sourceFile = sourceFileCache.get(path);
-        }
+        final SourceFile sourceFile = sourceFileService.findByPathAndCodePage(path, codePage);
+        logger.debug("Got SourceFile for path: {} (codePage: {})", path, codePage);
         return sourceFile;
     }
 
-    private PromptRule mapRule(Rule rule, AtomicLong ruleId) {
-        long id = ruleId.get();
+    private PromptRule mapRule(Rule rule) {
+        ReviewRunDetails reviewRunDetails = Objects.requireNonNull(reviewRunContext.getRunDetails(), "ReviewRunDetails cannot be null.");
+        Long reviewId = Objects.requireNonNull(reviewRunDetails.getReviewId(), "Review ID cannot be null.");
+
+        final Long id = ruleService.findOrInsertRule(reviewId, rule);
+
         logger.trace("Mapping PromptRule with id {} and code {}", id, rule.getCode());
         PromptRule pr = new PromptRule()
-                .setRuleKey(new RuleKey(ruleId.getAndIncrement(), rule.getCode()))
+                .setRuleKey(new RuleKey(id, rule.getCode()))
                 .setDescription(rule.getDescription())
                 .setSeverity(rule.getSeverity());
-        logger.debug("Mapped PromptRule: {}", pr);
+
+        if (logger.isDebugEnabled()) {
+            try {
+                String promptRuleAsString = objectMapper.writeValueAsString(pr);
+                logger.debug("Mapped PromptRule: {}", promptRuleAsString);
+            } catch (JsonProcessingException e) {
+                logger.warn("Failed to serialize PromptRule for logging: {}", e.getMessage());
+            }
+        }
+
         return pr;
     }
 

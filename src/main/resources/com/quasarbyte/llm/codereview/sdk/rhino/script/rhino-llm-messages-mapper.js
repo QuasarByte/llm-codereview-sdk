@@ -4,43 +4,50 @@ function mapPromptToMessages(prompt) {
     var messages = [];
 
     // System prompts (loop)
-    (prompt.getSystemPromptTexts() || []).forEach(function (systemText) {
-        messages.push({role: 'system', content: systemText});
-    });
+    var systemPrompts = prompt.getSystemPromptTexts() || [];
+    for (var i = 0; i < systemPrompts.length; i++) {
+        messages.push({ role: 'system', content: systemPrompts[i] });
+    }
 
     // Review prompts (loop)
-    (prompt.getReviewPromptTexts() || []).forEach(function (reviewText) {
-        messages.push({role: 'user', content: reviewText});
-    });
+    var reviewPrompts = prompt.getReviewPromptTexts() || [];
+    for (var i = 0; i < reviewPrompts.length; i++) {
+        messages.push({ role: 'user', content: reviewPrompts[i] });
+    }
 
     // Review target prompts (loop)
-    (prompt.getReviewTargetPromptTexts() || []).forEach(function (targetText) {
-        messages.push({role: 'user', content: targetText});
-    });
+    var targetPrompts = prompt.getReviewTargetPromptTexts() || [];
+    for (var i = 0; i < targetPrompts.length; i++) {
+        messages.push({ role: 'user', content: targetPrompts[i] });
+    }
 
     // File group prompts (loop)
-    (prompt.getFileGroupPromptTexts() || []).forEach(function (fileGroupText) {
-        messages.push({role: 'user', content: fileGroupText});
-    });
+    var fileGroupPrompts = prompt.getFileGroupPromptTexts() || [];
+    for (var i = 0; i < fileGroupPrompts.length; i++) {
+        messages.push({ role: 'user', content: fileGroupPrompts[i] });
+    }
 
-    messages.push({role: 'user', content: 'The code review rules:'});
-    messages.push({role: 'user', content: getRulesAsJson(rules)});
+    messages.push({ role: 'user', content: 'The code review rules:' });
+    messages.push({ role: 'user', content: getRulesAsJson(rules) });
 
     var files = prompt.getFiles() || [];
 
     if (files.length === 1) {
-        messages.push({role: 'user', content: 'Here is the file, presented as json and a code block:'});
+        messages.push({ role: 'user', content: 'Here is the file, presented as json and a code block:' });
     } else if (files.length > 1) {
-        messages.push({role: 'user', content: 'Here are the ' + files.length + ' files, each presented as json and a code block:'});
+        messages.push({ role: 'user', content: 'Here are the ' + files.length + ' files, each presented as json and a code block:' });
     }
 
-    files.forEach(function (file) {
-        var fileInfo = getFileInfo(file);
+    for (var i = 0; i < files.length; i++) {
+        var fileInfo = getFileInfo(files[i]);
         var fileInfoJson = getFileInfoJson(fileInfo);
-        var fileInfoContent = getFileInfoContent(fileInfo)
-        messages.push({role: 'user', content: fileInfoJson});
-        messages.push({role: 'user', content: fileInfoContent});
-    });
+        var fileInfoContent = getFileInfoContent(fileInfo);
+
+        messages.push({
+            role: 'user',
+            content: '=== FILE METADATA ===\n' + fileInfoJson + '\n\n=== FILE CONTENT ===\n' + fileInfoContent
+        });
+    }
 
     return messages;
 }
@@ -56,19 +63,22 @@ function getRulesAsJson(rules) {
 function getMappedRules(rules) {
     var result = [];
     if (rules) {
-        rules.forEach(function (rule) {
+        for (var i = 0; i < rules.length; i++) {
+            var rule = rules[i];
             result.push({
                 id: rule.ruleKey.id,
                 code: rule.ruleKey.code,
                 description: rule.description
             });
-        });
+        }
     }
     return result;
 }
 
 function getFileInfoContent(file) {
-    return '```' + getCodeTypeByFileNameExtension(file.extension) + '\n' + file.content + '\n' + '```';
+    var codeType = getCodeTypeByFile(file);
+    var content = file.content ? file.content : '';
+    return '```' + codeType + '\n' + content + '\n```';
 }
 
 function getFileInfoJson(file) {
@@ -79,7 +89,7 @@ function getFileInfoShort(file) {
     return {
         id: file.id,
         name: file.name,
-        type: getCodeTypeByFileNameExtension(file.extension),
+        type: getCodeTypeByFile(file),
         path: file.path,
         size: file.size,
         createdAt: file.createdAt,
@@ -100,76 +110,90 @@ function getFileInfo(file) {
     };
 }
 
-function getCodeTypeByFileNameExtension(fileType) {
-    const extensionToLanguage = {
-        js: 'javascript',
-        jsx: 'javascript',
-        ts: 'typescript',
-        tsx: 'typescript',
-        py: 'python',
-        java: 'java',
-        html: 'html',
-        css: 'css',
-        json: 'json',
-        xml: 'xml',
-        c: 'c',
-        cpp: 'cpp',
-        cc: 'cpp',
-        cxx: 'cpp',
-        h: 'c', // Or 'cpp' for C++ headers
-        hpp: 'cpp',
-        cs: 'csharp',
-        php: 'php',
-        rb: 'ruby',
-        go: 'go',
-        swift: 'swift',
-        sh: 'shell',
-        bash: 'shell',
-        zsh: 'shell',
-        ksh: 'shell',
-        md: 'markdown',
-        markdown: 'markdown',
-        yml: 'yaml',
-        yaml: 'yaml',
-        ini: 'ini',
-        toml: 'toml',
-        rs: 'rust',
-        scala: 'scala',
-        kt: 'kotlin',
-        kts: 'kotlin',
-        dart: 'dart',
-        sql: 'sql',
-        pl: 'perl',
-        lua: 'lua',
-        r: 'r',
-        m: 'matlab', // Could also be Objective-C; context needed
-        vb: 'vbnet',
-        asm: 'assembly',
-        s: 'assembly',
-        scss: 'scss',
-        less: 'less',
-        styl: 'stylus',
-        vue: 'vue',
-        coffee: 'coffeescript',
-        dockerfile: 'docker',
-        makefile: 'makefile',
-        cmake: 'cmake',
-        bat: 'batch',
-        ps1: 'powershell',
-        groovy: 'groovy',
-        gradle: 'gradle',
-        tex: 'latex',
-        latex: 'latex',
-        svg: 'svg',
-        txt: 'plaintext',
-        log: 'plaintext'
-    };
+function getCodeTypeByFile(file) {
+    if (file && file.extension && file.extension.trim() !== '') {
+        return getCodeTypeByFileNameExtension(file.extension);
+    } else {
+        return file && file.name && file.name.trim() !== '' ? file.name : 'plaintext';
+    }
+}
 
-    if (fileType && typeof fileType.toLowerCase === 'function') {
+function getCodeTypeByFileNameExtension(fileType) {
+    if (fileType) {
+        var extensionToLanguage = {
+            asm: 'assembly',
+            astro: 'astro',
+            bat: 'batch',
+            bash: 'shell',
+            c: 'c',
+            cc: 'cpp',
+            cmake: 'cmake',
+            coffee: 'coffeescript',
+            cpp: 'cpp',
+            cs: 'csharp',
+            css: 'css',
+            cxx: 'cpp',
+            dart: 'dart',
+            dockerfile: 'docker',
+            go: 'go',
+            gradle: 'gradle',
+            groovy: 'groovy',
+            h: 'c',
+            hcl: 'hcl',
+            html: 'html',
+            hpp: 'cpp',
+            ini: 'ini',
+            java: 'java',
+            js: 'javascript',
+            json: 'json',
+            jsx: 'javascript',
+            kt: 'kotlin',
+            ksh: 'shell',
+            kts: 'kotlin',
+            latex: 'latex',
+            less: 'less',
+            log: 'plaintext',
+            lua: 'lua',
+            m: 'matlab',
+            makefile: 'makefile',
+            markdown: 'markdown',
+            md: 'markdown',
+            php: 'php',
+            pl: 'perl',
+            properties: 'properties',
+            ps1: 'powershell',
+            py: 'python',
+            r: 'r',
+            rb: 'ruby',
+            rs: 'rust',
+            sass: 'sass',
+            scala: 'scala',
+            scss: 'scss',
+            sh: 'shell',
+            sql: 'sql',
+            styl: 'stylus',
+            svelte: 'svelte',
+            svg: 'svg',
+            swift: 'swift',
+            tex: 'latex',
+            toml: 'toml',
+            ts: 'typescript',
+            tsx: 'typescript',
+            txt: 'plaintext',
+            vb: 'vbnet',
+            vue: 'vue',
+            xml: 'xml',
+            yaml: 'yaml',
+            yml: 'yaml',
+            zig: 'zig',
+            zsh: 'shell'
+        };
+
         var key = fileType.toLowerCase();
         if (extensionToLanguage[key]) {
             return extensionToLanguage[key];
         }
     }
+
     return 'plaintext';
 }
