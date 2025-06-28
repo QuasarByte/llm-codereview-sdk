@@ -245,9 +245,9 @@ class CodeReviewReportHtmlServiceMustacheImplTest {
 
         // Then
         assertNotNull(htmlReport);
-        assertTrue(htmlReport.contains("Files Reviewed:</strong> 0"));
+        assertTrue(htmlReport.contains("Files with Issues:</strong> 0"));
         assertTrue(htmlReport.contains("Total Issues Found:</strong> 0"));
-        assertTrue(htmlReport.contains("No files were analyzed"));
+        assertTrue(htmlReport.contains("No issues found"));
 
         saveHtmlReportToFile(htmlReport, "test-report-empty.html");
     }

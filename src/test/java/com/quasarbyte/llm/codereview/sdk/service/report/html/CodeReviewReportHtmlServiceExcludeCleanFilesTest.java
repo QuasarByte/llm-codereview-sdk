@@ -70,7 +70,7 @@ class CodeReviewReportHtmlServiceExcludeCleanFilesTest {
         assertFalse(htmlReport.contains("another-clean-file.ts"), "Should exclude files without issues");
         
         // Should report correct counts - all files analyzed vs only files with issues in detailed view
-        assertTrue(htmlReport.contains("Files Reviewed:</strong> 3"), "Should count all files that were analyzed");
+        assertTrue(htmlReport.contains("Files with Issues:</strong> 1"), "Should count files with issues");
         assertTrue(htmlReport.contains("Total Issues Found:</strong> 2"), "Should count only issues from files with issues");
         
         System.out.println("=== EXCLUDE CLEAN FILES TEST ===");
