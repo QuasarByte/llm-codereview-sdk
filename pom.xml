@@ -6,7 +6,7 @@
 
     <groupId>com.quasarbyte.llm.codereview</groupId>
     <artifactId>sdk</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.1-SNAPSHOT</version>
     <url>https://github.com/QuasarByte/llm-codereview-sdk</url>
 
     <name>LLM Code Review SDK</name>

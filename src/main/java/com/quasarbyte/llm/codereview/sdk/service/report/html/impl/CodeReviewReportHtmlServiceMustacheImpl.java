@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -62,6 +63,9 @@ public class CodeReviewReportHtmlServiceMustacheImpl implements CodeReviewReport
 
             // STEP 2: Convert to template data (pure presentation logic)
             ReportTemplateData templateData = new ReportTemplateData(sanitizedResult, dateTimeFormatter);
+            
+            // STEP 2.1: Set file indices BEFORE template execution
+            // This ensures file numbers are set correctly (1, 2, 3... instead of 0, 0, 0...)
             setFileIndices(templateData);
 
             // STEP 3: Generate an HTML report
@@ -77,10 +81,17 @@ public class CodeReviewReportHtmlServiceMustacheImpl implements CodeReviewReport
     }
 
     private void setFileIndices(ReportTemplateData templateData) {
-        if (templateData.getFiles() != null) {
-            for (int i = 0; i < templateData.getFiles().size(); i++) {
-                templateData.getFiles().get(i).setIndex(i + 1);
+        List<ReportTemplateData.FileTemplateData> files = templateData.getFiles();
+        if (files != null && !files.isEmpty()) {
+            logger.debug("Setting indices for {} files", files.size());
+            for (int i = 0; i < files.size(); i++) {
+                int newIndex = i + 1; // Start numbering from 1
+                files.get(i).setIndex(newIndex);
+                logger.trace("Set index {} for file: {}", newIndex, files.get(i).getFileName());
             }
+            logger.debug("Successfully set file indices from 1 to {}", files.size());
+        } else {
+            logger.debug("No files to set indices for");
         }
     }
 
@@ -88,7 +99,7 @@ public class CodeReviewReportHtmlServiceMustacheImpl implements CodeReviewReport
         try {
             String templateSource = loadTemplate();
             return Mustache.compiler()
-                    .escapeHTML(true)       // Additional safety for template variables
+                    .escapeHTML(false)      // FIXED: Disable HTML escaping since data is already sanitized
                     .defaultValue("")       // Empty string for missing variables
                     .nullValue("")          // Empty string for null values
                     .compile(templateSource);

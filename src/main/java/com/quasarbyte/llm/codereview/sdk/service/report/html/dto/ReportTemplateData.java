@@ -25,6 +25,9 @@ public class ReportTemplateData {
 
     private final ReviewResult reviewResult;
     private final DateTimeFormatter dateFormatter;
+    
+    // Cache the file list to preserve indices set by setFileIndices()
+    private List<FileTemplateData> cachedFiles = null;
 
     /**
      * Constructor expects a pre-sanitized ReviewResult
@@ -38,8 +41,17 @@ public class ReportTemplateData {
     }
 
     public int getFilesCount() {
+        // Count only files with issues (consistent with getFiles() filtering)
+        List<FileTemplateData> files = getFiles();
+        int count = files != null ? files.size() : 0;
+        logger.trace("Files count (with issues only): {}", count);
+        return count;
+    }
+
+    public int getTotalFilesAnalyzed() {
+        // Count ALL files that were analyzed, regardless of whether they have issues
         int count = reviewResult.getItems() != null ? reviewResult.getItems().size() : 0;
-        logger.trace("Files count: {}", count);
+        logger.trace("Total files analyzed: {}", count);
         return count;
     }
 
@@ -66,22 +78,49 @@ public class ReportTemplateData {
     }
 
     public List<FileTemplateData> getFiles() {
+        // Return cached list if available (preserves indices set by setFileIndices)
+        if (cachedFiles != null) {
+            logger.trace("Returning cached file list with {} files", cachedFiles.size());
+            return cachedFiles;
+        }
+        
+        // Create the list for the first time
         if (reviewResult.getItems() != null && !reviewResult.getItems().isEmpty()) {
-            List<FileTemplateData> files = reviewResult.getItems().stream()
+            cachedFiles = reviewResult.getItems().stream()
                     .filter(Objects::nonNull)
                     .filter(item -> item.getFile() != null)
+                    .filter(item -> item.getComments() != null && !item.getComments().isEmpty()) // Exclude files without issues
                     .map(item -> new FileTemplateData(item, dateFormatter))
                     .collect(Collectors.toList());
-            logger.debug("Converted {} review items to file template data", files.size());
-            return files;
+            logger.debug("Created and cached {} file template data objects (excluded {} files without issues)", 
+                    cachedFiles.size(), 
+                    reviewResult.getItems().size() - cachedFiles.size());
+            return cachedFiles;
         }
+        
         logger.debug("No review items found, returning empty list");
-        return Collections.emptyList();
+        cachedFiles = Collections.emptyList();
+        return cachedFiles;
     }
 
     public boolean isHasFiles() {
         List<FileTemplateData> files = getFiles();
         return files != null && !files.isEmpty();
+    }
+    
+    /**
+     * Returns true if at least one file was analyzed, regardless of whether it has issues
+     * This is different from hasFiles() which only returns true for files WITH issues
+     */
+    public boolean isHasFilesAnalyzed() {
+        return reviewResult.getItems() != null && !reviewResult.getItems().isEmpty();
+    }
+    
+    /**
+     * Returns true if files were analyzed but none have issues (all clean)
+     */
+    public boolean isAllFilesClean() {
+        return isHasFilesAnalyzed() && !isHasFiles();
     }
 
     public ResourceUsageData getResourceUsage() {

@@ -259,7 +259,7 @@
     <!-- Summary -->
     <h2>Summary</h2>
     <div class="summary">
-        <div class="summary-item"><strong>Files Reviewed:</strong> {{filesCount}}</div>
+        <div class="summary-item"><strong>Files Reviewed:</strong> {{totalFilesAnalyzed}}</div>
         <div class="summary-item"><strong>Total Issues Found:</strong> {{totalIssues}}</div>
         {{#hasUsageData}}
         <div class="summary-item">
@@ -342,9 +342,14 @@
     </div>
     {{/files}}
     {{/hasFiles}}
-    {{^hasFiles}}
+    {{#allFilesClean}}
+    <div class="success">
+        ✅ All {{totalFilesAnalyzed}} file(s) were analyzed and no issues were found. Great job!
+    </div>
+    {{/allFilesClean}}
+    {{^hasFilesAnalyzed}}
     <p>No files were analyzed.</p>
-    {{/hasFiles}}
+    {{/hasFilesAnalyzed}}
 
     <!-- Resource Usage -->
     {{#resourceUsage}}
